@@ -7,6 +7,7 @@ import Image from "next/image";
 import { AddToPlaylistModal } from "@/components/modals/AddToPlaylistModal";
 import { LyricsModal } from "@/components/modals/LyricsModal";
 import { DownloadModal } from "@/components/modals/DownloadModal";
+import { downloadTrack } from "@/utils/downloader";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import { createClient } from "@/utils/supabase/client";
 
@@ -42,7 +43,7 @@ export function RightPanel() {
 
   const handleDownload = () => {
     if (!currentSong) return;
-    setShowDownloadModal(true);
+    downloadTrack(currentSong);
   };
 
   useEffect(() => {

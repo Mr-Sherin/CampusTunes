@@ -26,6 +26,7 @@ import { QueueDrawer } from "@/components/player/QueueDrawer";
 import { AddToPlaylistModal } from "@/components/modals/AddToPlaylistModal";
 import { LyricsModal } from "@/components/modals/LyricsModal";
 import { DownloadModal } from "@/components/modals/DownloadModal";
+import { downloadTrack } from "@/utils/downloader";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import { createClient } from "@/utils/supabase/client";
 import YouTube from "react-youtube";
@@ -102,7 +103,7 @@ export function BottomPlayer() {
       setTimeout(() => setDownloadStatus(null), 3000);
       return;
     }
-    setShowDownloadModal(true);
+    downloadTrack(currentSong);
   };
 
   // Record real play event when listening threshold is reached (anti-spam)
