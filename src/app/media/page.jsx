@@ -113,39 +113,30 @@ function MediaStreamPlayer() {
         </div>
 
         {/* Native Browser HTML5 Audio Player with 3-dots */}
-        {loading ? (
-          <div className="w-full py-4 flex items-center justify-center gap-3 text-zinc-400 text-sm">
-            <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-            <span>Preparing media stream...</span>
-          </div>
-        ) : error || !streamSrc ? (
-          <div className="w-full flex flex-col items-center gap-3">
-            <p className="text-xs text-amber-400">Stream loading directly via gateway...</p>
-            {youtubeId && (
-              <a
-                href={`https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${youtubeId}&f=mp3`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors shadow-lg shadow-violet-600/30"
-              >
-                <Download size={15} />
-                <span>Open Audio Stream Portal</span>
-                <ExternalLink size={13} />
-              </a>
-            )}
-          </div>
-        ) : (
-          <div className="w-full flex flex-col items-center">
-            {/* Standard native HTML5 audio element with three dots */}
-            <audio
-              ref={audioRef}
-              controls
-              autoPlay
-              src={streamSrc}
-              className="w-full rounded-xl bg-zinc-800/80 outline-none accent-violet-500 shadow-md"
+        <div className="w-full mt-2 flex flex-col items-center gap-3">
+          <audio
+            ref={audioRef}
+            controls
+            autoPlay
+            src={streamSrc || `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`}
+            className="w-full h-12 rounded-xl bg-zinc-800 outline-none accent-violet-500 shadow-lg"
+          >
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+
+        {/* Fallback helper only if stream portal needed */}
+        {youtubeId && (
+          <div className="mt-4 flex items-center justify-center">
+            <a
+              href={`https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${youtubeId}&f=mp3`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 hover:underline transition-colors"
             >
-              Your browser does not support the audio element.
-            </audio>
+              <span>Having trouble? Open audio download gateway</span>
+              <ExternalLink size={12} />
+            </a>
           </div>
         )}
 
