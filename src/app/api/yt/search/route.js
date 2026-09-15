@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import ytSearch from "yt-search";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +10,9 @@ async function fetchDirectYouTube(query) {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
       },
+      next: { revalidate: 0 },
     });
     if (!res.ok) return [];
 
@@ -57,7 +58,7 @@ async function fetchDirectYouTube(query) {
 
     return videos;
   } catch (e) {
-    console.warn("Direct scrape error:", e);
+    console.warn("Direct scrape warning:", e);
     return [];
   }
 }
@@ -73,20 +74,10 @@ export async function GET(request) {
   const query = rawQuery.trim();
 
   try {
-    // 1. Direct Chrome Scraper (Primary - ultra fast & works on Vercel)
+    // 1. Direct Scraper (Fastest, zero-dependency, works everywhere)
     let rawVideos = await fetchDirectYouTube(query);
 
-    // 2. Fallback to yt-search library if direct scraper returned nothing
-    if (!rawVideos || rawVideos.length === 0) {
-      try {
-        const results = await ytSearch(query);
-        rawVideos = results?.videos || [];
-      } catch (e) {
-        console.warn("yt-search fallback warning:", e);
-      }
-    }
-
-    // 3. If still empty, search with music suffix
+    // 2. Fallback search with "song" suffix if results are sparse
     if (!rawVideos || rawVideos.length === 0) {
       rawVideos = await fetchDirectYouTube(`${query} song`);
     }
@@ -173,7 +164,7 @@ export async function GET(request) {
 
     return NextResponse.json({ songs });
   } catch (error) {
-    console.error("YouTube search error:", error);
+    console.error("YouTube search route error:", error);
     return NextResponse.json({ songs: [] });
   }
 }
