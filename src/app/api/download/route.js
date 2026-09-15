@@ -145,6 +145,10 @@ export async function GET(request) {
     if (action === "url") {
       return NextResponse.json({ error: "Stream unavailable" }, { status: 404 });
     }
+
+    // E. Graceful fallback redirect so browser never gets 404 "File wasn't available on site"
+    const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${youtubeId}&f=mp3`;
+    return NextResponse.redirect(converterUrl);
   }
 
   return NextResponse.json(

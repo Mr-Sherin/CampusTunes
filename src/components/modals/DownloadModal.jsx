@@ -43,33 +43,80 @@ export function DownloadModal({ isOpen, onClose, song }) {
 
       const targetAudioUrl = song.audioUrl || song.audio_url || null;
 
-      // Build attachment download stream endpoint
-      const params = new URLSearchParams({
-        title: cleanTitle,
-        artist: cleanArtist,
-      });
-
+      // 1. Direct audio track (e.g. Supabase Campus upload)
       if (targetAudioUrl) {
-        params.set("audioUrl", targetAudioUrl);
+        const params = new URLSearchParams({
+          title: cleanTitle,
+          artist: cleanArtist,
+          audioUrl: targetAudioUrl,
+        });
+
+        const downloadEndpoint = `/api/download?${params.toString()}`;
+        const a = document.createElement("a");
+        a.href = downloadEndpoint;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setIsDownloading(false);
+        setDownloadSuccess(true);
+        setProgressMsg("Downloaded to your device!");
+        return;
       }
+
+      // 2. YouTube audio track
       if (ytId) {
-        params.set("youtubeId", ytId);
+        setProgressMsg("Extracting studio audio bitstream...");
+        let streamUrl = null;
+
+        try {
+          const checkRes = await fetch(
+            `/api/download?title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&action=url&youtubeId=${encodeURIComponent(ytId)}`
+          );
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData?.url) {
+              streamUrl = checkData.url;
+            }
+          }
+        } catch (checkErr) {
+          console.warn("Direct stream extraction check:", checkErr);
+        }
+
+        if (streamUrl) {
+          // Native Save As via stream proxy
+          const params = new URLSearchParams({
+            title: cleanTitle,
+            artist: cleanArtist,
+            audioUrl: streamUrl,
+          });
+          const downloadEndpoint = `/api/download?${params.toString()}`;
+          const a = document.createElement("a");
+          a.href = downloadEndpoint;
+          a.download = filename;
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          setIsDownloading(false);
+          setDownloadSuccess(true);
+          setProgressMsg("Downloaded to your device!");
+        } else {
+          // Reliable converter portal fallback to avoid 404 "File wasn't available on site"
+          const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${ytId}&f=mp3`;
+          window.open(converterUrl, "_blank", "noopener,noreferrer");
+
+          setIsDownloading(false);
+          setDownloadSuccess(true);
+          setProgressMsg("Download stream opened!");
+        }
+        return;
       }
 
-      const downloadEndpoint = `/api/download?${params.toString()}`;
-
-      // Trigger native OS "Save As" file dialog
-      const a = document.createElement("a");
-      a.href = downloadEndpoint;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      setIsDownloading(false);
-      setDownloadSuccess(true);
-      setProgressMsg("Downloaded to your device!");
+      throw new Error("No audio source available");
     } catch (err) {
       console.error("Modal download error:", err);
       setIsDownloading(false);
