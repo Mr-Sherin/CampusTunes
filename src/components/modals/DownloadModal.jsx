@@ -32,86 +32,44 @@ export function DownloadModal({ isOpen, onClose, song }) {
   const handleStartDownload = async () => {
     setIsDownloading(true);
     setDownloadSuccess(false);
-    setProgressMsg("Preparing audio stream...");
+    setProgressMsg("Connecting to studio audio stream...");
 
     try {
-      let targetUrl = song.audioUrl || song.audio_url;
-
       const ytId =
         song.youtubeId ||
         (typeof song.id === "string" && song.id.startsWith("yt_")
           ? song.id.replace("yt_", "")
           : null);
 
-      if (!targetUrl && ytId) {
-        setProgressMsg("Extracting studio audio bitstream...");
-        try {
-          const res = await fetch(
-            `/api/download?title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&action=url&youtubeId=${ytId}`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.url) {
-              targetUrl = data.url;
-            }
-          }
-        } catch (e) {
-          console.warn("API extraction notice:", e);
-        }
+      const targetAudioUrl = song.audioUrl || song.audio_url || null;
+
+      // Build attachment download stream endpoint
+      const params = new URLSearchParams({
+        title: cleanTitle,
+        artist: cleanArtist,
+      });
+
+      if (targetAudioUrl) {
+        params.set("audioUrl", targetAudioUrl);
+      }
+      if (ytId) {
+        params.set("youtubeId", ytId);
       }
 
-      if (targetUrl) {
-        setProgressMsg("Downloading high-definition audio file...");
-        try {
-          const res = await fetch(targetUrl, { mode: "cors" });
-          if (res.ok) {
-            const blob = await res.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+      const downloadEndpoint = `/api/download?${params.toString()}`;
 
-            setIsDownloading(false);
-            setDownloadSuccess(true);
-            setProgressMsg("Downloaded to your device!");
-            return;
-          }
-        } catch (fetchErr) {
-          console.warn("Direct blob save fallback:", fetchErr);
-        }
+      // Trigger native OS "Save As" file dialog
+      const a = document.createElement("a");
+      a.href = downloadEndpoint;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-        // Direct anchor fallback
-        const a = document.createElement("a");
-        a.href = targetUrl;
-        a.download = filename;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setIsDownloading(false);
-        setDownloadSuccess(true);
-        setProgressMsg("Download started in browser!");
-      } else {
-        // Fallback for YouTube streams where direct binary is prohibited
-        const directAudioStream = `https://www.youtube.com/watch?v=${ytId}`;
-        const a = document.createElement("a");
-        a.href = `https://loader.to/api/button/?url=${encodeURIComponent(directAudioStream)}&f=mp3`;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setIsDownloading(false);
-        setDownloadSuccess(true);
-        setProgressMsg("Audio file stream downloaded!");
-      }
+      setIsDownloading(false);
+      setDownloadSuccess(true);
+      setProgressMsg("Downloaded to your device!");
     } catch (err) {
       console.error("Modal download error:", err);
       setIsDownloading(false);
