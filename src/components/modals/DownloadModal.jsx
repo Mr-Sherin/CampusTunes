@@ -1,175 +1,287 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
-  X,
   Download,
   CheckCircle2,
-  Loader2,
+  X,
   Music2,
-  FileAudio,
   Sparkles,
-  ShieldCheck,
-  Share2,
+  Radio,
+  HardDrive,
+  Copy,
   Check,
-  Disc,
+  Loader2,
+  WifiOff,
 } from "lucide-react";
 import Image from "next/image";
+import { downloadSong, saveSongOffline, isSongOffline } from "@/utils/downloader";
 
-export function DownloadModal({ isOpen, onClose, song }) {
-  const [quality, setQuality] = useState("320");
+const QUALITY_OPTIONS = [
+  {
+    id: "320kbps",
+    label: "320 kbps (Studio MP3)",
+    desc: "Highest audio fidelity & maximum bass definition",
+    multiplier: 40, // KB per sec
+    badge: "Ultra HD",
+    isRecommended: true,
+  },
+  {
+    id: "256kbps",
+    label: "256 kbps (High Quality)",
+    desc: "Optimal balance between sound clarity & file size",
+    multiplier: 32,
+    badge: "HQ",
+  },
+  {
+    id: "128kbps",
+    label: "128 kbps (Data Saver)",
+    desc: "Fast download, lightweight for cellular data",
+    multiplier: 16,
+    badge: "Fast",
+  },
+  {
+    id: "wav",
+    label: "Lossless Master (WAV)",
+    desc: "Uncompressed 44.1 kHz / 16-bit broadcast PCM",
+    multiplier: 176.4,
+    badge: "Lossless",
+  },
+];
+
+export function DownloadModal({ song, isOpen, onClose }) {
+  const [isMounted, setIsMounted] = useState(false);
+  const [selectedQuality, setSelectedQuality] = useState("320kbps");
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [progressMsg, setProgressMsg] = useState("");
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [isSavingOffline, setIsSavingOffline] = useState(false);
+  const [isOfflineSaved, setIsOfflineSaved] = useState(false);
+  const [hasCopiedLink, setHasCopiedLink] = useState(false);
 
-  if (!isOpen || !song) return null;
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
-  const cleanTitle = (song.title || "Track").trim();
-  const cleanArtist = (song.artist || song.artist_name || "Campus Musician").trim();
-  const filename = `${cleanArtist} - ${cleanTitle}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
+  useEffect(() => {
+    if (song?.id) {
+      setIsOfflineSaved(isSongOffline(song.id));
+      setIsDownloaded(false);
+      setDownloadProgress(0);
+      setIsDownloading(false);
+    }
+  }, [song?.id, isOpen]);
 
-  const ytId =
-    song.youtubeId ||
-    (typeof song.id === "string" && song.id.startsWith("yt_")
-      ? song.id.replace("yt_", "")
-      : null);
+  if (!isOpen || !song || !isMounted) return null;
 
-  const targetAudioUrl = song.audioUrl || song.audio_url || null;
-  const coverUrl =
-    song.coverUrl ||
-    song.cover_url ||
-    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80";
+  const durationSec = song.duration || 180;
+  const currentOpt = QUALITY_OPTIONS.find((q) => q.id === selectedQuality) || QUALITY_OPTIONS[0];
+  const estimatedSizeMb = ((durationSec * currentOpt.multiplier) / 1024).toFixed(1);
 
-  // Build direct media tab URL
-  const mediaTabParams = new URLSearchParams({
-    title: cleanTitle,
-    artist: cleanArtist,
-    cover: coverUrl,
-  });
-  if (targetAudioUrl) mediaTabParams.set("audioUrl", targetAudioUrl);
-  if (ytId) mediaTabParams.set("youtubeId", ytId);
-  const mediaTabUrl = `/media?${mediaTabParams.toString()}`;
+  const handleStartDownload = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+    setDownloadProgress(10);
 
-  const handleOpenMediaTab = () => {
-    window.location.href = mediaTabUrl;
-  };
-
-  const handleStartDownload = () => {
-    window.location.href = mediaTabUrl;
-  };
-
-  const handleCopyTrackLink = () => {
-    if (typeof window !== "undefined") {
-      const shareUrl = `${window.location.origin}/search?q=${encodeURIComponent(cleanTitle)}`;
-      navigator.clipboard.writeText(shareUrl);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
+    try {
+      await downloadSong(song, {
+        quality: selectedQuality,
+        onProgress: (pct) => setDownloadProgress(pct),
+      });
+      setDownloadProgress(100);
+      setIsDownloaded(true);
+      setTimeout(() => {
+        setIsDownloading(false);
+      }, 1200);
+    } catch (err) {
+      console.error("Modal download failed:", err);
+      setIsDownloading(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div
-        className="relative w-full max-w-md rounded-3xl bg-gradient-to-b from-[#18162b] via-[#100e1f] to-[#090812] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 sm:p-7 text-white select-none overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Ambient Glow */}
-        <div className="absolute -top-20 -right-20 w-48 h-48 bg-violet-600/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-48 h-48 bg-fuchsia-600/15 rounded-full blur-3xl pointer-events-none" />
+  const handleSaveOffline = async () => {
+    if (isSavingOffline) return;
+    setIsSavingOffline(true);
+    try {
+      const success = await saveSongOffline(song);
+      if (success) {
+        setIsOfflineSaved(true);
+      }
+    } finally {
+      setIsSavingOffline(false);
+    }
+  };
 
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-              <Download size={16} />
+  const handleCopyStreamLink = () => {
+    const videoId = song.youtubeId || (song.id?.startsWith("yt_") ? song.id.replace("yt_", "") : "");
+    const streamUrl = `${window.location.origin}/api/download?id=${videoId}&title=${encodeURIComponent(
+      song.title
+    )}&artist=${encodeURIComponent(song.artist)}`;
+
+    navigator.clipboard.writeText(streamUrl);
+    setHasCopiedLink(true);
+    setTimeout(() => setHasCopiedLink(false), 2000);
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-200 select-none">
+      <div className="bg-[#0d0c1b] border border-white/20 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-[0_25px_80px_rgba(0,0,0,0.95)] space-y-6 relative zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-white/15 bg-[#161528] shadow-lg">
+              <Image
+                src={song.coverUrl || "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80"}
+                alt={song.title}
+                fill
+                className="object-cover"
+              />
             </div>
-            <div>
-              <h3 className="font-display font-bold text-sm text-white">Download Studio Track</h3>
-              <p className="text-[11px] text-zinc-400">Audio playback & three-dot download</p>
+            <div className="min-w-0">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-secondary flex items-center gap-1">
+                <Sparkles size={12} /> High-Res Audio Downloader
+              </span>
+              <h3 className="font-display font-bold text-lg text-white truncate max-w-[280px]">
+                {song.title}
+              </h3>
+              <p className="text-xs text-on-surface-variant truncate max-w-[280px]">
+                {song.artist} • {Math.floor(durationSec / 60)}:{(durationSec % 60).toString().padStart(2, "0")}
+              </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-on-surface-variant hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Track Preview Card */}
-        <div className="mt-5 p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4">
-          <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-zinc-800 shadow-md">
-            <Image
-              src={coverUrl}
-              alt={cleanTitle}
-              fill
-              className="object-cover"
-            />
+        {/* Quality Tier Selector */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold uppercase tracking-wider text-white/80 flex items-center gap-1.5">
+              <Radio size={14} className="text-primary" /> Select Audio Format & Bitrate
+            </label>
+            <span className="text-xs font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
+              Est. ~{estimatedSizeMb} MB
+            </span>
           </div>
 
-          <div className="min-w-0 flex-1">
-            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-violet-300 uppercase tracking-widest bg-violet-500/10 px-2 py-0.5 rounded-md border border-violet-500/20 mb-1">
-              <Disc size={10} className="animate-spin text-violet-400" />
-              {song.genre || "Campus Official"}
-            </span>
-            <h4 className="font-bold text-sm text-white truncate">{cleanTitle}</h4>
-            <p className="text-xs text-zinc-400 truncate">{cleanArtist}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {QUALITY_OPTIONS.map((opt) => {
+              const isSelected = selectedQuality === opt.id;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => setSelectedQuality(opt.id)}
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between space-y-1 relative group ${
+                    isSelected
+                      ? "bg-primary/20 border-primary shadow-[0_0_15px_rgba(168,85,247,0.3)] text-white"
+                      : "bg-white/[0.03] border-white/10 hover:border-white/20 text-white/70 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">{opt.label}</span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        opt.isRecommended
+                          ? "bg-secondary/20 text-secondary border border-secondary/30"
+                          : "bg-white/10 text-white/60"
+                      }`}
+                    >
+                      {opt.badge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant leading-tight">{opt.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Standard Browser Audio Player with 3-Dots */}
-        {targetAudioUrl && (
-          <div className="mt-4 p-3 bg-zinc-900/90 border border-white/10 rounded-2xl flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] text-zinc-400 px-1">
-              <span>Standard Media Player:</span>
-              <span className="text-violet-400 text-[10px] font-medium">Click 3 dots (⋮) to Download</span>
+        {/* Download Progress Bar (When Active) */}
+        {isDownloading && (
+          <div className="space-y-1.5 bg-black/40 p-3 rounded-2xl border border-primary/30 animate-in fade-in">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-violet-300 flex items-center gap-1.5">
+                <Loader2 size={13} className="animate-spin text-primary" />
+                Downloading track stream...
+              </span>
+              <span className="font-mono text-primary">{downloadProgress}%</span>
             </div>
-            <audio
-              controls
-              src={targetAudioUrl}
-              className="w-full h-10 rounded-lg outline-none"
-            >
-              Your browser does not support the audio element.
-            </audio>
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-300 rounded-full"
+                style={{ width: `${downloadProgress}%` }}
+              />
+            </div>
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="mt-5 flex flex-col gap-2.5">
+        {/* Main Action Buttons */}
+        <div className="space-y-3 pt-1">
           <button
-            onClick={handleOpenMediaTab}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
+            onClick={handleStartDownload}
+            disabled={isDownloading}
+            className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer ${
+              isDownloaded
+                ? "bg-emerald-600 text-white shadow-emerald-600/30"
+                : "bg-gradient-to-r from-primary to-secondary hover:brightness-110 active:scale-[0.98] text-white shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+            }`}
           >
-            <Download size={16} />
-            <span>Open in Separate Tab (With 3-Dots)</span>
-          </button>
-
-          <button
-            onClick={handleCopyTrackLink}
-            className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-          >
-            {copiedLink ? (
+            {isDownloading ? (
               <>
-                <Check size={14} className="text-emerald-400" />
-                <span>Track Link Copied!</span>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Downloading Audio ({downloadProgress}%)...</span>
+              </>
+            ) : isDownloaded ? (
+              <>
+                <CheckCircle2 size={18} />
+                <span>Track Downloaded Successfully!</span>
               </>
             ) : (
               <>
-                <Share2 size={14} />
-                <span>Copy Track Share Link</span>
+                <Download size={18} />
+                <span>Download {currentOpt.label} (~{estimatedSizeMb} MB)</span>
               </>
             )}
           </button>
-        </div>
 
-        {/* Security Badge */}
-        <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-zinc-500">
-          <ShieldCheck size={12} className="text-emerald-400" />
-          <span>CampusTunes Native HTML5 Audio Delivery</span>
+          {/* Secondary Actions: Offline Cache & Direct Stream Copy */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <button
+              onClick={handleSaveOffline}
+              disabled={isSavingOffline || isOfflineSaved}
+              className={`py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                isOfflineSaved
+                  ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-400"
+                  : "bg-white/[0.04] border-white/10 hover:bg-white/10 text-white/80 hover:text-white"
+              }`}
+            >
+              {isSavingOffline ? (
+                <Loader2 size={14} className="animate-spin text-primary" />
+              ) : isOfflineSaved ? (
+                <Check size={14} />
+              ) : (
+                <WifiOff size={14} />
+              )}
+              <span>{isOfflineSaved ? "Saved for Offline" : "Save for Offline"}</span>
+            </button>
+
+            <button
+              onClick={handleCopyStreamLink}
+              className="py-2.5 px-3 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              {hasCopiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+              <span>{hasCopiedLink ? "Audio Link Copied!" : "Copy Direct Link"}</span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

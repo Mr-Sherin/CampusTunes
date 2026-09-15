@@ -1,4 +1,11 @@
-export async function downloadSong(song, options = {}) {
+import { Song } from "@/store/usePlayerStore";
+
+export interface DownloadOptions {
+  quality?: "320kbps" | "256kbps" | "128kbps" | "wav";
+  onProgress?: (progress: number) => void;
+}
+
+export async function downloadSong(song: Song, options: DownloadOptions = {}) {
   const { quality = "320kbps", onProgress } = options;
 
   const title = encodeURIComponent(song.title || "Track");
@@ -18,12 +25,12 @@ export async function downloadSong(song, options = {}) {
     const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
     const contentType = response.headers.get("Content-Type") || "audio/mpeg";
 
-    let blob;
+    let blob: Blob;
 
     if (response.body && totalBytes > 0 && onProgress) {
       const reader = response.body.getReader();
       let receivedBytes = 0;
-      const chunks = [];
+      const chunks: Uint8Array[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -88,7 +95,7 @@ export async function downloadSong(song, options = {}) {
 
 const CACHE_NAME = "campustunes-offline-audio-v1";
 
-export async function saveSongOffline(song) {
+export async function saveSongOffline(song: Song): Promise<boolean> {
   if (typeof window === "undefined" || !("caches" in window)) return false;
 
   try {
@@ -104,7 +111,7 @@ export async function saveSongOffline(song) {
     if (res.ok) {
       await cache.put(`/offline-track/${song.id}`, res);
       const savedListRaw = localStorage.getItem("campustunes_offline_songs");
-      const list = savedListRaw ? JSON.parse(savedListRaw) : [];
+      const list: Song[] = savedListRaw ? JSON.parse(savedListRaw) : [];
       if (!list.some((s) => s.id === song.id)) {
         list.push(song);
         localStorage.setItem("campustunes_offline_songs", JSON.stringify(list));
@@ -118,12 +125,12 @@ export async function saveSongOffline(song) {
   }
 }
 
-export function isSongOffline(songId) {
+export function isSongOffline(songId: string): boolean {
   if (typeof window === "undefined") return false;
   try {
     const savedListRaw = localStorage.getItem("campustunes_offline_songs");
     if (!savedListRaw) return false;
-    const list = JSON.parse(savedListRaw);
+    const list: Song[] = JSON.parse(savedListRaw);
     return list.some((s) => s.id === songId);
   } catch {
     return false;

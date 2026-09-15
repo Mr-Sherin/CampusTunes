@@ -14,29 +14,36 @@ import {
   Sliders,
   Settings,
   Upload,
-  CheckCheck,
-  ShieldCheck,
-} from "lucide-react";
+  CheckCheck } from
+
+
+"lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePlayerStore } from "@/store/usePlayerStore";
 import { CampusLogo } from "@/components/brand/CampusLogo";
 import { createClient } from "@/utils/supabase/client";
-import { useAuthModalStore } from "@/store/useAuthModalStore";
-import { useAuth } from "@/context/AuthContext";
+
+
+
+
+
+
+
+
+
 
 export function Navbar() {
   const router = useRouter();
   const { setCurrentSong, syncLikesFromStorage } = usePlayerStore();
-  const { openAuthModal } = useAuthModalStore();
-  const { user, profile, isAdmin, signOut } = useAuth();
   const supabase = createClient();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [user, setUser] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -80,6 +87,22 @@ export function Navbar() {
     loadRealActivity();
   }, [supabase]);
 
+  // Live Supabase Auth Listener
+  useEffect(() => {
+    async function checkUser() {
+      const { data } = await supabase.auth.getUser();
+      setUser(data.user);
+    }
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   // Click outside to dismiss menus
   useEffect(() => {
@@ -123,53 +146,20 @@ export function Navbar() {
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        let campusMatches = [];
-        try {
-          const { data: dbSongs } = await supabase
-            .from("songs")
-            .select("*")
-            .eq("status", "published")
-            .or(`title.ilike.%${query}%,artist_name.ilike.%${query}%,genre.ilike.%${query}%`)
-            .limit(5);
-
-          if (dbSongs && dbSongs.length > 0) {
-            campusMatches = dbSongs.map((s) => ({
-              id: s.id,
-              title: s.title,
-              artist: s.artist_name,
-              coverUrl: s.cover_url,
-              audioUrl: s.audio_url,
-              genre: s.genre,
-              duration: s.duration || 180,
-              source: "campus",
-              download_enabled: s.download_enabled,
-            }));
-          }
-        } catch {}
-
         const res = await fetch(`/api/yt/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error(`Search request failed with status ${res.status}`);
         const data = await res.json();
-        const ytSongs = data.songs || [];
-
-        const combined = [...campusMatches, ...ytSongs];
-        const seen = new Set();
-        const unique = combined.filter((s) => {
-          const key = (s.title + s.artist).toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-
-        setSearchResults(unique);
+        setSearchResults(data.songs || []);
       } catch (err) {
         console.error("Search fetch error:", err);
+        setSearchResults([]);
       } finally {
         setIsSearching(false);
       }
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, supabase]);
+  }, [searchQuery]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -184,14 +174,13 @@ export function Navbar() {
   const unreadCount = notifications.filter((n) => n.unread).length;
 
   const displayName =
-    profile?.full_name ||
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.first_name ||
-    user?.email?.split("@")[0] ||
-    "Student";
+  user?.user_metadata?.full_name ||
+  user?.user_metadata?.first_name ||
+  user?.email?.split("@")[0] ||
+  "Student";
 
   return (
-    <header className="h-16 shrink-0 bg-[#09090b]/95 backdrop-blur-md border-b border-zinc-800/80 px-4 md:px-6 z-40 sticky top-0 select-none flex items-center justify-between gap-4">
+    <header className="h-16 shrink-0 bg-[#0a0914]/90 backdrop-blur-2xl border-b border-white/[0.08] px-4 md:px-6 z-40 sticky top-0 select-none flex items-center justify-between gap-4">
       {/* 1. Left Section: Brand Logo & Navigation Controls */}
       <div className="flex items-center gap-3 shrink-0">
         <CampusLogo size={32} showText={true} />
@@ -199,14 +188,14 @@ export function Navbar() {
         <div className="hidden md:flex items-center gap-1.5 pl-2 border-l border-white/10">
           <button
             onClick={() => router.back()}
-            className="w-8 h-8 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
             title="Go back">
             
             <ChevronLeft size={17} />
           </button>
           <button
             onClick={() => router.forward()}
-            className="w-8 h-8 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
             title="Go forward">
             
             <ChevronRight size={17} />
@@ -218,10 +207,10 @@ export function Navbar() {
       <div className="flex-1 max-w-xl mx-auto" ref={searchRef}>
         <div className="relative">
           <div
-            className={`flex items-center gap-2.5 px-4 py-2 rounded-full border transition-all duration-200 ${
+            className={`flex items-center gap-2.5 px-4 py-2 rounded-full border transition-all duration-300 ${
             isSearchFocused ?
-            "bg-[#242424] border-white/30 ring-1 ring-white/20" :
-            "bg-[#242424]/80 hover:bg-[#2a2a2a] border-transparent"}`
+            "bg-[#141226] border-violet-500/60 shadow-[0_0_20px_rgba(168,85,247,0.35)] ring-1 ring-violet-500/30" :
+            "bg-[#111022]/90 hover:bg-[#16152b] border-white/10"}`
             }>
             
             {isSearching ?
@@ -234,7 +223,7 @@ export function Navbar() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
-              placeholder="Search artists, tracks, college hits..."
+              placeholder="Search artists, tracks, Malayalam anthems..."
               className="w-full bg-transparent text-xs md:text-sm text-white placeholder:text-on-surface-variant/60 focus:outline-none" />
             
             {searchQuery &&
@@ -248,11 +237,11 @@ export function Navbar() {
             }
           </div>
 
-          {/* Instant Dropdown Search Results - Clean Professional Surface */}
+          {/* Instant Dropdown Search Results - 100% Solid Dark Surface */}
           {isSearchFocused && searchQuery.trim().length > 0 &&
-          <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#18181b] border border-zinc-700/80 p-2 shadow-2xl z-[70] max-h-[380px] overflow-y-auto [scrollbar-width:none]">
+          <div className="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#0c0b17] border border-white/20 p-2.5 shadow-[0_25px_60px_rgba(0,0,0,0.98)] z-[70] max-h-[380px] overflow-y-auto [scrollbar-width:none]">
               {searchResults.length > 0 ?
-            <div className="space-y-1">
+            <div className="space-y-1.5">
                   {searchResults.slice(0, 6).map((song) =>
               <div
                 key={song.id}
@@ -261,27 +250,27 @@ export function Navbar() {
                   setIsSearchFocused(false);
                   setSearchQuery("");
                 }}
-                className="flex items-center gap-3 p-2 rounded-xl bg-transparent hover:bg-zinc-800 cursor-pointer transition-all group">
+                className="flex items-center gap-3 p-2.5 rounded-xl bg-[#131124] hover:bg-[#1f1a3a] border border-white/5 hover:border-violet-500/30 cursor-pointer transition-all group">
                 
-                      <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-zinc-700 bg-zinc-800">
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-white/10 bg-[#1a1830]">
                         <Image src={song.coverUrl} alt={song.title} fill className="object-cover" sizes="40px" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-white truncate group-hover:text-violet-400 transition-colors">
+                        <p className="text-xs font-semibold text-white truncate group-hover:text-primary transition-colors">
                           {song.title}
                         </p>
-                        <p className="text-[11px] text-zinc-400 truncate">{song.artist}</p>
+                        <p className="text-[11px] text-on-surface-variant truncate">{song.artist}</p>
                       </div>
-                      <span className="text-[10px] font-semibold text-zinc-300 group-hover:text-white group-hover:bg-violet-600 px-2.5 py-1 rounded-full bg-zinc-800 transition-all">
+                      <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20 group-hover:bg-cyan-500 group-hover:text-black transition-all">
                         Play
                       </span>
                     </div>
               )}
                 </div> :
             !isSearching ?
-            <div className="p-4 text-center text-xs text-zinc-400 flex flex-col items-center gap-1">
-                  <Music2 size={20} className="text-zinc-600" />
-                  <span>No tracks found for &quot;{searchQuery}&quot;</span>
+            <div className="p-4 text-center text-xs text-on-surface-variant flex flex-col items-center gap-1">
+                  <Music2 size={20} className="text-white/30" />
+                  <span>No musical tracks found for &quot;{searchQuery}&quot;</span>
                 </div> :
             null}
             </div>
@@ -292,41 +281,35 @@ export function Navbar() {
       {/* 3. Right Section: Icon Action Controls & Profile / Auth */}
       <div className="flex items-center gap-2.5 shrink-0">
         {/* Upload Track Icon Button (Opens Studio directly with upload dialog) */}
-        <button
-          onClick={() => {
-            if (!user) {
-              openAuthModal("upload original tracks & access creator studio");
-            } else {
-              router.push("/dashboard?upload=true");
-            }
-          }}
-          className="w-9 h-9 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer"
-          title="Upload Original Track"
-        >
-          <Upload size={16} />
-        </button>
+        <Link
+          href="/dashboard?upload=true"
+          className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+          title="Upload Original Track">
+          
+          <Upload size={16} className="text-secondary" />
+        </Link>
 
         {/* Notifications Popover Menu */}
         <div className="relative" ref={notificationRef}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="w-9 h-9 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 flex items-center justify-center text-zinc-300 hover:text-white transition-all cursor-pointer relative"
+            className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm relative"
             title="Notifications">
             
             <Bell size={16} />
             {unreadCount > 0 &&
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-violet-500 ring-2 ring-[#09090b]" />
+            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400 ring-2 ring-[#0a0914] animate-pulse" />
             }
           </button>
 
-          {/* Notifications Dropdown Modal - Clean Surface */}
+          {/* Notifications Dropdown Modal - 100% Solid Opaque */}
           {showNotifications &&
-          <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-[#18181b] border border-zinc-700/80 p-3.5 shadow-2xl z-[60] space-y-2.5">
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+          <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-[#121124] border border-white/20 p-3.5 shadow-[0_25px_60px_rgba(0,0,0,0.95)] z-[60] space-y-2.5">
+              <div className="flex items-center justify-between pb-2 border-b border-white/10">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-white tracking-tight">Notifications</span>
+                  <span className="text-xs font-bold text-white tracking-tight">Campus Notifications</span>
                   {unreadCount > 0 &&
-                <span className="px-2 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] font-bold rounded-full">
+                <span className="px-2 py-0.5 bg-primary/30 text-primary text-[10px] font-bold rounded-full border border-primary/30">
                       {unreadCount} new
                     </span>
                 }
@@ -334,7 +317,7 @@ export function Navbar() {
                 {unreadCount > 0 &&
               <button
                 onClick={markAllRead}
-                className="text-[11px] text-zinc-400 hover:text-white flex items-center gap-1 cursor-pointer font-medium">
+                className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 cursor-pointer font-medium">
                 
                     <CheckCheck size={13} /> Mark read
                   </button>
@@ -342,15 +325,17 @@ export function Navbar() {
               </div>
 
               {notifications.length > 0 ?
-            <div className="space-y-1.5 max-h-[320px] overflow-y-auto [scrollbar-width:none]">
+            <div className="space-y-2 max-h-[320px] overflow-y-auto [scrollbar-width:none]">
                   {notifications.map((item) =>
               <Link
                 key={item.id}
                 href={item.link}
                 onClick={() => setShowNotifications(false)}
-                className={`block p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  item.unread ? "bg-zinc-800/80 border-zinc-700 hover:bg-zinc-800" : "bg-transparent border-transparent hover:bg-zinc-800/50"
-                }`}>
+                className={`block p-3 rounded-xl border transition-all cursor-pointer ${
+                item.unread ?
+                "bg-[#1f1a3a] border-violet-500/40 hover:bg-[#27214a] shadow-md" :
+                "bg-[#161528] border-white/[0.08] hover:bg-[#1d1c33]"}`
+                }>
                 
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-bold text-white truncate">{item.title}</p>
@@ -375,87 +360,65 @@ export function Navbar() {
 
         {/* User Account / Profile Icon */}
         <div className="relative" ref={profileMenuRef}>
-          {user ? (
-            <div>
+          {user ?
+          <div>
               <button
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center p-0.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                title={displayName}
-              >
-                <div className="relative w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-bold text-xs uppercase overflow-hidden">
-                  {displayName.charAt(0)}
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center p-0.5 rounded-full hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              title={displayName}>
+              
+                <div className="relative w-9 h-9 rounded-full p-[1.5px] bg-gradient-to-tr from-violet-500 via-fuchsia-500 to-cyan-400 shrink-0 shadow-[0_0_12px_rgba(168,85,247,0.5)]">
+                  <div className="relative w-full h-full rounded-full bg-[#121124] flex items-center justify-center text-white font-bold text-xs uppercase overflow-hidden">
+                    {displayName.charAt(0)}
+                  </div>
                 </div>
               </button>
 
-              {/* Profile Menu Dropdown - Clean Zinc Surface */}
-              {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-52 rounded-xl bg-[#18181b] border border-zinc-700/80 p-2 shadow-2xl z-[60] space-y-1">
-                  <div className="px-3 py-2 border-b border-zinc-800 mb-1">
-                    <p className="text-xs font-semibold text-white truncate">{displayName}</p>
-                    <p className="text-[11px] text-zinc-400 truncate">{user.email}</p>
+              {/* Profile Menu Dropdown - 100% Solid Opaque */}
+              {showProfileMenu &&
+            <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl bg-[#121124] border border-white/20 p-2 shadow-[0_25px_60px_rgba(0,0,0,0.95)] z-[60] space-y-1">
+                  <div className="px-3 py-2 border-b border-white/10 mb-1">
+                    <p className="text-xs font-bold text-white truncate">{displayName}</p>
+                    <p className="text-[11px] text-on-surface-variant truncate">{user.email}</p>
                   </div>
 
                   <Link
-                    href={profile?.username ? `/profile/${profile.username}` : "/profile"}
-                    onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
-                  >
-                    <User size={14} />
-                    <span>My Student Profile</span>
-                  </Link>
-
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
-                  >
-                    <Sliders size={14} />
+                href="/dashboard"
+                onClick={() => setShowProfileMenu(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+                
+                    <Sliders size={14} className="text-primary" />
                     <span>Artist Studio</span>
                   </Link>
 
-                  {isAdmin && (
-                    <Link
-                      href="/admin"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-amber-300 hover:text-amber-200 hover:bg-amber-500/10 transition-colors font-semibold"
-                    >
-                      <ShieldCheck size={14} />
-                      <span>Admin Control Center</span>
-                    </Link>
-                  )}
-
                   <Link
-                    href="/settings"
-                    onClick={() => setShowProfileMenu(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
-                  >
-                    <Settings size={14} />
+                href="/settings"
+                onClick={() => setShowProfileMenu(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+                
+                    <Settings size={14} className="text-cyan-400" />
                     <span>Account Settings</span>
                   </Link>
 
                   <button
-                    onClick={async () => {
-                      setShowProfileMenu(false);
-                      await signOut();
-                      router.push("/");
-                    }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer text-left"
-                  >
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer text-left">
+                
                     <LogOut size={14} />
                     <span>Sign Out</span>
                   </button>
                 </div>
-              )}
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="w-9 h-9 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 text-zinc-300 hover:text-white flex items-center justify-center transition-all cursor-pointer"
-              title="Sign In / Account"
-            >
+            }
+            </div> :
+
+          <Link
+            href="/login"
+            className="w-9 h-9 rounded-full bg-gradient-to-tr from-violet-600 to-cyan-500 hover:opacity-95 text-white flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)] transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="Sign In / Account">
+            
               <User size={16} />
             </Link>
-          )}
+          }
         </div>
       </div>
     </header>);

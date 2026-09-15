@@ -2,37 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { MOCK_SONGS, usePlayerStore } from "@/store/usePlayerStore";
-import { useAuthModalStore } from "@/store/useAuthModalStore";
-import { createClient } from "@/utils/supabase/client";
-import { Search, Play, Pause, Compass, Loader2, Music2, Heart } from "lucide-react";
+import { Search, Play, Pause, Compass, Loader2, Music2, Heart, Download } from "lucide-react";
 import Image from "next/image";
+import { DownloadModal } from "@/components/modals/DownloadModal";
 
 const GENRE_CARDS = [
 { name: "Malayalam Indie", query: "Malayalam Indie Songs", color: "from-purple-600 to-indigo-900", image: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80" },
 { name: "Lo-Fi & Study", query: "Lo-Fi Study Beats Instrumental", color: "from-cyan-600 to-teal-900", image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80" },
 { name: "Hip-Hop / Rap", query: "South Indian Hip Hop Rap", color: "from-amber-500 to-red-900", image: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&q=80" },
 { name: "Pop & Top Hits", query: "Global Top Hits 2026", color: "from-pink-600 to-rose-900", image: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80" },
-{ name: "Rock & Band", query: "College Band Rock Kerala", color: "from-emerald-500 to-cyan-900", image: "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=500&q=80" },
+{ name: "Rock & Band", query: "College Band Rock Kerala", color: "from-emerald-500 to-cyan-900", image: "https://images.unsplash.com/photo-1493225457124-a1a2a5f529a8?w=500&q=80" },
 { name: "Late Night Beats", query: "Midnight Drive Synthwave Chill", color: "from-blue-600 to-slate-900", image: "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=500&q=80" }];
 
 
 export default function SearchPage() {
   const { currentSong, isPlaying, setCurrentSong, setIsPlaying, likedSongIds, toggleLikeSong } = usePlayerStore();
-  const { openAuthModal } = useAuthModalStore();
-  const supabase = createClient();
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState(MOCK_SONGS);
-
-  const handleLikeClick = async (song) => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      openAuthModal("save tracks to your permanent library collection");
-      return;
-    }
-    toggleLikeSong(song);
-  };
+  const [downloadTargetSong, setDownloadTargetSong] = useState(null);
 
   useEffect(() => {
     const activeQuery = query.trim() || selectedCategory || "";
@@ -46,56 +35,20 @@ export default function SearchPage() {
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        // 1. Query Supabase for Campus Originals & Student Tracks
-        let campusMatches = [];
-        try {
-          const { data: dbSongs } = await supabase
-            .from("songs")
-            .select("*")
-            .eq("status", "published")
-            .or(`title.ilike.%${activeQuery}%,artist_name.ilike.%${activeQuery}%,genre.ilike.%${activeQuery}%`)
-            .limit(10);
-
-          if (dbSongs && dbSongs.length > 0) {
-            campusMatches = dbSongs.map((s) => ({
-              id: s.id,
-              title: s.title,
-              artist: s.artist_name,
-              coverUrl: s.cover_url,
-              audioUrl: s.audio_url,
-              genre: s.genre,
-              duration: s.duration || 180,
-              source: "campus",
-              download_enabled: s.download_enabled,
-            }));
-          }
-        } catch (dbErr) {
-          console.warn("Campus search query warning:", dbErr);
-        }
-
-        // 2. Query Global YouTube Music / Spotify Catalog
-        const res = await fetch(`/api/yt/search?q=${encodeURIComponent(activeQuery)}`);
-        const data = await res.json();
-        const ytSongs = data.songs || [];
-
-        // 3. Query Local Mock Hits
         const localMatches = MOCK_SONGS.filter(
           (s) =>
-            s.title.toLowerCase().includes(activeQuery.toLowerCase()) ||
-            s.artist.toLowerCase().includes(activeQuery.toLowerCase())
+          s.title.toLowerCase().includes(activeQuery.toLowerCase()) ||
+          s.artist.toLowerCase().includes(activeQuery.toLowerCase())
         );
 
-        // Merge results, giving priority to Campus Originals, then Global Streams
-        const combined = [...campusMatches, ...ytSongs, ...localMatches];
-        const seen = new Set();
-        const unique = combined.filter((s) => {
-          const key = (s.title + s.artist).toLowerCase();
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-
-        setResults(unique);
+        const res = await fetch(`/api/yt/search?q=${encodeURIComponent(activeQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const ytSongs = data.songs || [];
+          setResults([...localMatches, ...ytSongs]);
+        } else {
+          setResults(localMatches);
+        }
       } catch (err) {
         console.error("Search page error:", err);
       } finally {
@@ -104,7 +57,7 @@ export default function SearchPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, selectedCategory, supabase]);
+  }, [query, selectedCategory]);
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -117,7 +70,7 @@ export default function SearchPage() {
       {/* Search Header */}
       <div className="relative max-w-2xl">
         <div className="relative">
-          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
+          <Search size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" />
           <input
             type="text"
             value={query}
@@ -126,10 +79,10 @@ export default function SearchPage() {
               setSelectedCategory(null);
             }}
             placeholder="Search songs, campus creators, playlists..."
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-full py-3.5 pl-12 pr-12 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors placeholder:text-zinc-500 shadow-sm" />
+            className="w-full bg-[#121124] border border-white/15 rounded-full py-4 pl-12 pr-12 text-base text-white focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all shadow-xl placeholder:text-white/40" />
           
           {isSearching &&
-          <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-violet-400 animate-spin" />
+          <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-primary animate-spin" />
           }
         </div>
       </div>
@@ -202,14 +155,14 @@ export default function SearchPage() {
             return (
               <div
                 key={song.id}
-                className={`flex items-center justify-between p-3 rounded-xl transition-all group ${
+                className={`flex items-center justify-between p-3 rounded-2xl transition-all group ${
                 isCurrent ?
-                "bg-zinc-800 border border-zinc-700 shadow-sm" :
-                "hover:bg-zinc-800/50 border border-transparent"}`
+                "bg-primary/20 border border-primary/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]" :
+                "hover:bg-white/[0.06] border border-transparent"}`
                 }>
                 
                   <div className="flex items-center gap-4 min-w-0 flex-1">
-                    <span className="w-6 text-center text-xs font-mono text-zinc-500 group-hover:hidden">
+                    <span className="w-6 text-center text-xs font-mono text-on-surface-variant group-hover:hidden">
                       {idx + 1}
                     </span>
                     <button
@@ -220,7 +173,7 @@ export default function SearchPage() {
                         setCurrentSong(song);
                       }
                     }}
-                    className="w-6 hidden group-hover:flex items-center justify-center text-violet-400 cursor-pointer">
+                    className="w-6 hidden group-hover:flex items-center justify-center text-primary cursor-pointer">
                     
                       {isCurrentPlaying ?
                     <Pause size={16} fill="currentColor" /> :
@@ -229,7 +182,7 @@ export default function SearchPage() {
                     }
                     </button>
 
-                    <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 border border-zinc-700 bg-zinc-800 shadow-sm">
+                    <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 shadow-md">
                       <Image src={song.coverUrl} alt={song.title} fill className="object-cover" />
                     </div>
 
@@ -237,34 +190,38 @@ export default function SearchPage() {
                       <h4
                       onClick={() => setCurrentSong(song)}
                       className={`text-sm font-semibold truncate cursor-pointer hover:underline ${
-                      isCurrent ? "text-violet-400 font-bold" : "text-white"}`
+                      isCurrent ? "text-primary font-bold" : "text-white"}`
                       }>
                       
                         {song.title}
                       </h4>
-                      <p className="text-xs text-zinc-400 truncate">{song.artist}</p>
+                      <p className="text-xs text-on-surface-variant truncate">{song.artist}</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4 shrink-0 pl-4">
                     {song.plays &&
-                  <span className="text-xs text-zinc-500 hidden md:block">
+                  <span className="text-xs text-on-surface-variant hidden md:block">
                         {song.plays} views
                       </span>
                   }
-                    <span className="text-xs font-mono text-zinc-500">
+                    <span className="text-xs font-mono text-on-surface-variant">
                       {formatDuration(song.duration)}
                     </span>
                     <button
-                      onClick={() => handleLikeClick(song)}
-                      className="p-2 text-zinc-400 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
-                      title={isLiked ? "Remove from Library" : "Save to Library"}
-                    >
-                    
+                      onClick={() => setDownloadTargetSong(song)}
+                      className="p-2 text-on-surface-variant hover:text-primary hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                      title="Download Track (MP3)">
+                      <Download size={16} className="text-white/50 hover:text-primary transition-colors" />
+                    </button>
+
+                    <button
+                      onClick={() => toggleLikeSong(song)}
+                      className="p-2 text-on-surface-variant hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                      title={isLiked ? "Remove from Library" : "Save to Library"}>
                       <Heart
-                      size={17}
-                      className={isLiked ? "fill-violet-500 text-violet-500" : "text-zinc-500 hover:text-white"} />
-                    
+                        size={17}
+                        className={isLiked ? "fill-primary text-primary drop-shadow-[0_0_8px_rgba(168,85,247,0.7)]" : "text-white/50 hover:text-white"} />
                     </button>
                   </div>
                 </div>);
@@ -279,6 +236,13 @@ export default function SearchPage() {
           </div>
         }
       </section>
+
+      {/* High-Res Audio Download Modal */}
+      <DownloadModal
+        song={downloadTargetSong}
+        isOpen={Boolean(downloadTargetSong)}
+        onClose={() => setDownloadTargetSong(null)}
+      />
     </div>);
 
 }

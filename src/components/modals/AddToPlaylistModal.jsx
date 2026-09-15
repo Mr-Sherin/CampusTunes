@@ -148,7 +148,7 @@ export function AddToPlaylistModal({ song, isOpen, onClose }) {
                   <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
                   isIn ?
-                  "bg-violet-600 border-violet-500 text-white shadow-sm" :
+                  "bg-emerald-500 border-emerald-400 text-black shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
                   "border-white/20 text-transparent hover:border-white/50"}`
                   }>
                   

@@ -12,43 +12,31 @@ import {
   Pin,
   Sliders,
   Music2,
-  Heart,
-  User,
-  ShieldCheck,
   X } from
+
 "lucide-react";
 import { usePlayerStore } from "@/store/usePlayerStore";
-import { useAuthModalStore } from "@/store/useAuthModalStore";
+import { AuthModal } from "@/components/modals/AuthModal";
 import { createClient } from "@/utils/supabase/client";
-import { useAuth } from "@/context/AuthContext";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, profile, isAdmin } = useAuth();
   const supabase = createClient();
   const [activePlaylistId, setActivePlaylistId] = useState(null);
   const [mounted, setMounted] = useState(false);
 
   const { likedSongIds, playlists, createPlaylist, syncPlaylistsFromStorage, syncLikesFromStorage } = usePlayerStore();
-  const { openAuthModal } = useAuthModalStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
 
   const handleOpenCreate = async () => {
     const { data } = await supabase.auth.getUser();
     if (!data.user) {
-      openAuthModal("create and manage student playlists");
+      setShowAuthModal(true);
       return;
     }
     setShowCreateModal(true);
-  };
-
-  const handleStudioClick = async (e) => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      e.preventDefault();
-      openAuthModal("access artist studio and release analytics");
-    }
   };
 
   useEffect(() => {
@@ -65,12 +53,10 @@ export function Sidebar() {
   }, [pathname]);
 
   const navItems = [
-    { name: "Discover", href: "/", icon: AudioLines },
-    { name: "Student Showcase", href: "/campus", icon: GraduationCap },
-    { name: "Campus Charts", href: "/charts", icon: Disc3 },
-    { name: "Your Collection", href: "/library", icon: ListMusic },
-    ...(isAdmin ? [{ name: "Admin Center", href: "/admin", icon: ShieldCheck }] : []),
-  ];
+  { name: "Discover", href: "/", icon: AudioLines },
+  { name: "Student Showcase", href: "/campus", icon: GraduationCap },
+  { name: "Campus Charts", href: "/search", icon: Disc3 },
+  { name: "Your Collection", href: "/library", icon: ListMusic }];
 
 
   const handleCreate = (e) => {
@@ -81,79 +67,56 @@ export function Sidebar() {
     setShowCreateModal(false);
   };
 
-  const handleNavClick = async (e, href, name) => {
-    if (href === "/campus" || href === "/library") {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        e.preventDefault();
-        openAuthModal(
-          href === "/campus"
-            ? "access Student Showcase and live campus productions"
-            : "access your permanent collection & playlists"
-        );
-      }
-    }
-  };
-
-  const handleLikedSongsClick = async (e) => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      e.preventDefault();
-      openAuthModal("access your Liked Songs collection");
-    }
-  };
-
-  const handlePlaylistClick = async (e, playlistName) => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      e.preventDefault();
-      openAuthModal(`access "${playlistName}" and manage your library`);
-    }
-  };
-
   return (
-    <aside className="hidden md:flex flex-col w-[240px] shrink-0 h-full bg-[#09090b] border-r border-zinc-800/80 p-3 select-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden z-30">
-      {/* Primary Navigation Buttons */}
-      <nav className="space-y-1 pb-3 border-b border-zinc-800/80">
+    <aside className="hidden md:flex flex-col w-[240px] shrink-0 h-full bg-[#0a0914]/85 backdrop-blur-2xl border-r border-white/[0.08] p-3 select-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shadow-2xl z-30">
+      {/* Primary Navigation Pill Buttons */}
+      <nav className="space-y-1 pb-4 border-b border-white/[0.08]">
         {navItems.map((item) => {
           const isActive = pathname === item.href && (!activePlaylistId || item.href !== "/library");
           return (
             <Link
               key={item.name}
               href={item.href}
-              onClick={(e) => handleNavClick(e, item.href, item.name)}
-              className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`relative flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
               isActive ?
-              "bg-zinc-800 text-white font-semibold" :
-              "text-zinc-400 hover:text-white hover:bg-zinc-800/50"}`
+              "bg-primary/20 text-white font-semibold border border-primary/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]" :
+              "text-on-surface-variant hover:text-white hover:bg-white/[0.05]"}`
               }>
+              
+              {isActive &&
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-gradient-to-b from-primary to-secondary rounded-r-full shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+              }
               <item.icon
-                size={18}
-                className={isActive ? "text-white" : "text-zinc-400"} />
+                size={19}
+                className={isActive ? "text-primary drop-shadow-[0_0_6px_rgba(168,85,247,0.6)]" : "text-on-surface-variant"} />
+              
               <span>{item.name}</span>
             </Link>);
+
         })}
       </nav>
 
       {/* + New Playlist Button */}
-      <div className="py-3 border-b border-zinc-800/80">
+      <div className="py-3.5 border-b border-white/[0.08]">
         <button
           onClick={handleOpenCreate}
-          className="w-full py-2 px-3.5 rounded-lg bg-zinc-800/70 hover:bg-zinc-700/80 text-zinc-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all border border-zinc-700/50 cursor-pointer">
-          <Plus size={15} />
+          className="w-full py-2.5 px-4 rounded-full bg-gradient-to-r from-violet-600/20 to-cyan-500/20 hover:from-violet-600/30 hover:to-cyan-500/30 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all hover:scale-102 active:scale-98 border border-violet-500/30 shadow-[0_0_15px_rgba(168,85,247,0.2)] cursor-pointer">
+          
+          <Plus size={16} className="text-primary" />
           Create Playlist
         </button>
       </div>
 
       {/* Inline Quick Modal for New Playlist */}
       {showCreateModal &&
-      <form onSubmit={handleCreate} className="p-3 my-2 rounded-xl bg-zinc-900 border border-zinc-700 space-y-2 animate-in fade-in">
+      <form onSubmit={handleCreate} className="p-3 my-2 rounded-2xl bg-[#141226] border border-violet-500/40 space-y-2 animate-in fade-in">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-white">New Playlist</span>
+            <span className="text-[11px] font-bold text-white">New Playlist</span>
             <button
             type="button"
             onClick={() => setShowCreateModal(false)}
-            className="text-zinc-400 hover:text-white p-0.5">
+            className="text-on-surface-variant hover:text-white p-0.5">
+            
               <X size={14} />
             </button>
           </div>
@@ -161,13 +124,14 @@ export function Sidebar() {
           type="text"
           value={newPlaylistName}
           onChange={(e) => setNewPlaylistName(e.target.value)}
-          placeholder="Playlist title"
+          placeholder="Enter title"
           autoFocus
-          className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-violet-500" />
+          className="w-full bg-[#0d0c18] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-primary" />
         
           <button
           type="submit"
-          className="w-full py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors cursor-pointer">
+          className="w-full py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-colors cursor-pointer">
+          
             Create
           </button>
         </form>
@@ -178,28 +142,24 @@ export function Sidebar() {
         {/* Pinned Liked Songs */}
         <Link
           href="/library"
-          onClick={handleLikedSongsClick}
-          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-colors group ${
+          className={`flex flex-col px-4 py-2 rounded-xl text-sm transition-all group ${
           pathname === "/library" && !activePlaylistId ?
-          "bg-zinc-800 text-white" :
-          "text-zinc-400 hover:text-white hover:bg-zinc-800/50"}`
+          "bg-white/10 text-white border border-white/10" :
+          "text-on-surface-variant hover:text-white hover:bg-white/[0.05]"}`
           }>
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-700 shadow-[0_2px_8px_rgba(124,58,237,0.35)] flex items-center justify-center shrink-0">
-            <Heart size={14} className="fill-white text-white" />
+          
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-xs text-white truncate">Liked Songs</span>
+            <Pin size={12} className="text-white/40 group-hover:text-primary rotate-45 transition-colors" />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-xs text-white truncate">Liked Songs</span>
-            </div>
-            <span className="text-[11px] text-zinc-400" suppressHydrationWarning>
-              {mounted ? likedSongIds.size : 0} {likedSongIds.size === 1 ? "track" : "tracks"}
-            </span>
-          </div>
+          <span className="text-[10px] text-cyan-400 mt-0.5 font-medium" suppressHydrationWarning>
+            📌 {mounted ? likedSongIds.size : 0} tracks saved
+          </span>
         </Link>
 
         {/* User Playlists */}
-        <div className="pt-3 pb-1 px-3.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500" suppressHydrationWarning>
+        <div className="pt-2 pb-1 px-3">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/60" suppressHydrationWarning>
             Your Playlists ({mounted ? playlists.length : 1})
           </span>
         </div>
@@ -210,35 +170,41 @@ export function Sidebar() {
             <Link
               key={pl.id}
               href={`/library?playlist=${pl.id}`}
-              onClick={(e) => handlePlaylistClick(e, pl.name)}
-              className={`flex flex-col px-3.5 py-2 rounded-lg text-sm transition-colors group ${
+              className={`flex flex-col px-4 py-2 rounded-xl text-sm transition-all group ${
               isSelected ?
-              "bg-zinc-800 text-white" :
-              "text-zinc-400 hover:text-white hover:bg-zinc-800/40"}`
+              "bg-violet-950/50 text-white border border-violet-500/40 shadow-sm" :
+              "text-on-surface-variant hover:text-white hover:bg-white/[0.05]"}`
               }>
+              
               <div className="flex items-center justify-between">
-                <span className="font-medium text-xs text-white truncate">{pl.name}</span>
-                <Music2 size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0 ml-1" />
+                <span className="font-semibold text-xs text-white truncate">{pl.name}</span>
+                <Music2 size={12} className="text-white/30 group-hover:text-secondary transition-colors shrink-0 ml-1" />
               </div>
-              <span className="text-[11px] text-zinc-500 mt-0.5" suppressHydrationWarning>
+              <span className="text-[10px] text-on-surface-variant/70 mt-0.5" suppressHydrationWarning>
                 {pl.songs.length} {pl.songs.length === 1 ? "track" : "tracks"}
               </span>
             </Link>);
+
         })}
       </div>
 
       {/* Footer Navigation: Studio */}
-      <div className="mt-auto pt-3 border-t border-zinc-800/80 space-y-1 shrink-0">
+      <div className="mt-auto pt-3 border-t border-white/[0.08] space-y-1 shrink-0">
         <Link
           href="/dashboard"
-          onClick={handleStudioClick}
-          className="flex items-center gap-3 px-3.5 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors cursor-pointer"
-        >
-          <Sliders size={16} />
+          className="flex items-center gap-3 px-4 py-2 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-white hover:bg-white/[0.05] transition-all">
+          
+          <Sliders size={16} className="text-primary" />
           <span>Artist Studio</span>
         </Link>
       </div>
-    </aside>
-  );
+
+      {/* Auth Barrier Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        actionText="create and manage playlists" />
+      
+    </aside>);
 
 }

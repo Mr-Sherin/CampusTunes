@@ -1,165 +1,116 @@
 import { NextResponse } from "next/server";
-import ytdl from "@distube/ytdl-core";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { create } from "youtube-dl-exec";
+import path from "path";
+import fs from "fs";
 
-const execFileAsync = promisify(execFile);
+export const maxDuration = 60;
 
-export const dynamic = "force-dynamic";
+function getYtDlp() {
+  const binaryCandidates = [
+    path.resolve(process.cwd(), "node_modules/youtube-dl-exec/bin/yt-dlp.exe"),
+    path.resolve(process.cwd(), "node_modules/youtube-dl-exec/bin/yt-dlp"),
+    path.resolve(process.cwd(), "bin/yt-dlp.exe"),
+  ];
 
-// Stream cache to speed up repeat requests
-const streamCache = new Map();
+  for (const p of binaryCandidates) {
+    if (fs.existsSync(p)) {
+      return create(p);
+    }
+  }
+  return create("yt-dlp");
+}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const title = searchParams.get("title") || "Track";
-  const artist = searchParams.get("artist") || "Artist";
-  const audioUrl = searchParams.get("audioUrl");
-  const youtubeId = searchParams.get("youtubeId");
-  const action = searchParams.get("action");
+  const videoId = searchParams.get("id");
+  const directUrl = searchParams.get("url");
+  const rawTitle = searchParams.get("title") || "CampusTunes Audio";
+  const rawArtist = searchParams.get("artist") || "Campus Artist";
 
-  // Clean filename for the native Save dialog
-  const safeArtist = artist.replace(/[/\\?%*:|"<>]/g, "").trim() || "CampusTunes";
-  const safeTitle = title.replace(/[/\\?%*:|"<>]/g, "").trim() || "Track";
-  const cleanFilename = `${safeArtist} - ${safeTitle}.mp3`;
+  // Clean filename for safety across OS
+  const cleanTitle = rawTitle.replace(/[\\/:*?"<>|]/g, "_").trim();
+  const cleanArtist = rawArtist.replace(/[\\/:*?"<>|]/g, "_").trim();
 
-  const mode = searchParams.get("mode") || "inline"; // "inline" for player with 3-dot download, "attachment" for instant download
-  const dispositionType = mode === "attachment" ? "attachment" : "inline";
-
-  // 1. Direct Audio URL (e.g. Supabase Storage / MP3 link)
-  if (audioUrl && audioUrl.startsWith("http")) {
-    if (action === "url") {
-      return NextResponse.json({ success: true, url: audioUrl, filename: cleanFilename });
-    }
-
+  // 1. Direct Audio URL (Campus uploads / Supabase storage)
+  if (directUrl && directUrl.startsWith("http")) {
     try {
-      const audioRes = await fetch(audioUrl);
-      if (audioRes.ok) {
-        return new Response(audioRes.body, {
+      const response = await fetch(directUrl);
+      if (response.ok && response.body) {
+        const filename = `${cleanArtist} - ${cleanTitle}.mp3`;
+        return new Response(response.body, {
           headers: {
-            "Content-Type": "audio/mpeg",
-            "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
-            "Cache-Control": "public, max-age=86400",
-            "Accept-Ranges": "bytes",
+            "Content-Type": response.headers.get("Content-Type") || "audio/mpeg",
+            "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
+            "Content-Length": response.headers.get("Content-Length") || "",
+            "Cache-Control": "public, max-age=31536000, immutable",
           },
         });
       }
-    } catch (proxyErr) {
-      console.warn("Direct audio proxy fetch error:", proxyErr);
-      return NextResponse.redirect(audioUrl);
+    } catch (e) {
+      console.error("Direct audio download error:", e);
     }
   }
 
-  // 2. YouTube Audio Extraction & Streaming
-  if (youtubeId) {
-    const videoUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+  // 2. Real YouTube High-Res Audio Extraction & Instant Streaming
+  if (videoId) {
+    try {
+      const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const ytdl = getYtDlp();
 
-    // A. Check in-memory cache first
-    const cached = streamCache.get(youtubeId);
-    if (cached && Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
-      if (action === "url") {
-        return NextResponse.json({ success: true, url: cached.url, filename: cleanFilename });
-      }
-      try {
-        const audioRes = await fetch(cached.url);
-        if (audioRes.ok) {
-          return new Response(audioRes.body, {
+      const info = await ytdl(targetUrl, {
+        dumpSingleJson: true,
+        noCheckCertificates: true,
+        noWarnings: true,
+        preferFreeFormats: true,
+        addHeader: [
+          "referer:youtube.com",
+          "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        ],
+      });
+
+      if (info && info.formats) {
+        const audioFormats = info.formats.filter(
+          (f) => f.vcodec === "none" && f.acodec && f.acodec !== "none" && f.url
+        );
+
+        if (audioFormats.length > 0) {
+          // Prefer universal AAC (m4a) for 100% native Windows Media Player / Groove / iPhone / Android playback
+          const preferredFormat =
+            audioFormats.find((f) => f.ext === "m4a" || f.acodec?.includes("mp4a")) ||
+            audioFormats[audioFormats.length - 1];
+
+          const audioStreamUrl = preferredFormat.url;
+          const ext = preferredFormat.ext === "m4a" ? "m4a" : "mp3";
+          const contentType = preferredFormat.ext === "m4a" ? "audio/mp4" : "audio/mpeg";
+          const filename = `${cleanArtist} - ${cleanTitle}.${ext}`;
+
+          const audioRes = await fetch(audioStreamUrl, {
             headers: {
-              "Content-Type": "audio/mpeg",
-              "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
-              "Accept-Ranges": "bytes",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             },
           });
-        }
-      } catch (e) {
-        // Cached stream expired, continue with fresh extraction
-      }
-    }
 
-    // B. Attempt extraction with @distube/ytdl-core
-    try {
-      if (ytdl.validateID(youtubeId) || ytdl.validateURL(videoUrl)) {
-        const info = await ytdl.getInfo(videoUrl);
-        const format = ytdl.chooseFormat(info.formats, {
-          quality: "highestaudio",
-          filter: "audioonly",
-        });
+          if (audioRes.ok && audioRes.body) {
+            const headers = new Headers();
+            headers.set("Content-Type", contentType);
+            headers.set("Content-Disposition", `attachment; filename="${encodeURIComponent(filename)}"`);
+            if (audioRes.headers.get("content-length")) {
+              headers.set("Content-Length", audioRes.headers.get("content-length"));
+            }
+            headers.set("Accept-Ranges", "bytes");
+            headers.set("Cache-Control", "public, max-age=86400");
 
-        if (format?.url) {
-          streamCache.set(youtubeId, { url: format.url, timestamp: Date.now() });
-
-          if (action === "url") {
-            return NextResponse.json({ success: true, url: format.url, filename: cleanFilename });
-          }
-
-          const streamRes = await fetch(format.url);
-          if (streamRes.ok) {
-            return new Response(streamRes.body, {
-              headers: {
-                "Content-Type": "audio/mpeg",
-                "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
-                "Accept-Ranges": "bytes",
-              },
-            });
+            return new Response(audioRes.body, { headers });
           }
         }
       }
-    } catch (ytdlErr) {
-      console.warn("ytdl-core extraction attempt:", ytdlErr?.message || ytdlErr);
+    } catch (err) {
+      console.error("YouTube full audio download error:", err);
     }
-
-    // C. Attempt extraction with yt-dlp (local development / environments with python)
-    try {
-      const { stdout } = await execFileAsync("python", [
-        "-m",
-        "yt_dlp",
-        "-g",
-        "-f",
-        "bestaudio",
-        videoUrl,
-      ]);
-
-      const streamUrl = stdout
-        .trim()
-        .split("\n")
-        .filter((line) => line.startsWith("http"))
-        .pop();
-
-      if (streamUrl) {
-        streamCache.set(youtubeId, { url: streamUrl, timestamp: Date.now() });
-
-        if (action === "url") {
-          return NextResponse.json({ success: true, url: streamUrl, filename: cleanFilename });
-        }
-
-        const streamRes = await fetch(streamUrl);
-        if (streamRes.ok) {
-          return new Response(streamRes.body, {
-            headers: {
-              "Content-Type": "audio/mpeg",
-              "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
-              "Accept-Ranges": "bytes",
-            },
-          });
-        }
-        return NextResponse.redirect(streamUrl);
-      }
-    } catch (ytDlpErr) {
-      // yt-dlp not available
-    }
-
-    // D. If action was just checking url, return error if none found
-    if (action === "url") {
-      return NextResponse.json({ error: "Stream unavailable" }, { status: 404 });
-    }
-
-    // E. Graceful fallback redirect so browser never gets 404 "File wasn't available on site"
-    const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${youtubeId}&f=mp3`;
-    return NextResponse.redirect(converterUrl);
   }
 
   return NextResponse.json(
-    { error: "Audio stream not found or could not be extracted" },
-    { status: 404 }
+    { error: "Audio track could not be resolved. Please try again." },
+    { status: 500 }
   );
 }
