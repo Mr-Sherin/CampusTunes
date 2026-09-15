@@ -103,7 +103,12 @@ export function BottomPlayer() {
       setTimeout(() => setDownloadStatus(null), 3000);
       return;
     }
-    downloadTrack(currentSong);
+    downloadTrack(currentSong, (progress) => {
+      setDownloadStatus(progress);
+      if (progress.status === "success" || progress.status === "error") {
+        setTimeout(() => setDownloadStatus(null), 4000);
+      }
+    });
   };
 
   // Record real play event when listening threshold is reached (anti-spam)
