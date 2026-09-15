@@ -126,88 +126,54 @@ export function BottomPlayer() {
     }
   }, [currentTime, duration, currentSong?.id]);
 
-  // Synchronize HTML5 Audio
+  // Synchronize Play / Pause across both HTML5 Audio and YouTube engines
   useEffect(() => {
-    if (!audioRef.current || isYouTube) return;
-    if (directAudioUrl) {
-      if (isPlaying) {
+    if (isPlaying) {
+      if (isYouTube) {
+        if (ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+          try {
+            ytPlayerRef.current.playVideo();
+          } catch (e) {
+            console.warn("YouTube play error:", e);
+          }
+        }
+      } else if (audioRef.current && directAudioUrl) {
         const p = audioRef.current.play();
         if (p !== undefined) {
           p.catch((err) => console.warn("Audio autoplay blocked:", err));
         }
-      } else {
-        audioRef.current.pause();
       }
-    }
-  }, [isPlaying, currentSong?.id, directAudioUrl, isYouTube]);
-
-  useEffect(() => {
-    if (!audioRef.current || isYouTube) return;
-    audioRef.current.volume = isMuted ? 0 : volume;
-  }, [volume, isMuted, isYouTube]);
-
-  // Handle Seek Command from Store
-  useEffect(() => {
-    if (seekCommand === null) return;
-
-    if (isYouTube && ytPlayerRef.current) {
-      try {
-        ytPlayerRef.current.seekTo(seekCommand, true);
-        setPlaybackTime(seekCommand);
-      } catch (e) {
-        console.error("YouTube seek error:", e);
+    } else {
+      // Unconditional immediate pause on BOTH engines
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch (e) {}
       }
-    } else if (audioRef.current) {
-      audioRef.current.currentTime = seekCommand;
-      setPlaybackTime(seekCommand);
-    }
-    setSeekCommand(null);
-  }, [seekCommand, isYouTube, setPlaybackTime, setSeekCommand]);
-
-  // Synchronize YouTube Player Play / Pause & Track changes
-  useEffect(() => {
-    if (!isYouTube || !ytPlayerRef.current || !isYtReady) return;
-
-    try {
-      const iframe = typeof ytPlayerRef.current.getIframe === "function" ? ytPlayerRef.current.getIframe() : null;
-      if (!iframe || !iframe.src) return;
-
-      if (isPlaying) {
-        if (typeof ytPlayerRef.current.playVideo === "function") {
-          ytPlayerRef.current.playVideo();
-        }
-      } else {
-        if (typeof ytPlayerRef.current.pauseVideo === "function") {
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+        try {
           ytPlayerRef.current.pauseVideo();
-        }
+        } catch (e) {}
       }
-    } catch {
-      // Gracefully handle iframe unmount or postMessage timing
     }
-  }, [isPlaying, isYouTube, isYtReady, currentSong?.id, currentSong?.youtubeId]);
+  }, [isPlaying, isYouTube, directAudioUrl, isYtReady, currentSong?.id, currentSong?.youtubeId]);
 
-  // Synchronize YouTube Player Volume
+  // Synchronize Volume & Mute Commands across both engines
   useEffect(() => {
-    if (!isYouTube || !ytPlayerRef.current || !isYtReady) return;
-
-    try {
-      const iframe = typeof ytPlayerRef.current.getIframe === "function" ? ytPlayerRef.current.getIframe() : null;
-      if (!iframe || !iframe.src) return;
-
-      if (isMuted) {
-        if (typeof ytPlayerRef.current.mute === "function") {
-          ytPlayerRef.current.mute();
+    if (audioRef.current && !isYouTube) {
+      audioRef.current.volume = isMuted ? 0 : volume;
+    }
+    if (ytPlayerRef.current && isYouTube) {
+      try {
+        if (isMuted) {
+          if (typeof ytPlayerRef.current.mute === "function") ytPlayerRef.current.mute();
+        } else {
+          if (typeof ytPlayerRef.current.unMute === "function") ytPlayerRef.current.unMute();
+          if (typeof ytPlayerRef.current.setVolume === "function") {
+            ytPlayerRef.current.setVolume(Math.round(volume * 100));
+          }
         }
-      } else {
-        if (typeof ytPlayerRef.current.unMute === "function") {
-          ytPlayerRef.current.unMute();
-        }
-        if (typeof ytPlayerRef.current.setVolume === "function") {
-          ytPlayerRef.current.setVolume(Math.round(volume * 100));
-        }
-      }
-    } catch {
-      // Gracefully handle iframe unmount or postMessage timing
+      } catch (e) {}
     }
   }, [volume, isMuted, isYouTube, isYtReady]);
 

@@ -11,43 +11,36 @@ export async function GET(request) {
 
   const query = rawQuery.trim();
 
-  // If query does not contain musical keywords, append "song" for higher music precision
-  const isMusicQuery =
-  /song|music|track|audio|band|remix|acoustic|theme|ost|lyrics|singer|album|cover/i.test(query);
-  const searchQuery = isMusicQuery ? query : `${query} song`;
-
   try {
-    const results = await ytSearch(searchQuery);
+    // 1. First search direct query
+    let results = await ytSearch(query);
 
-    // Non-music filter keywords to reject phone unboxings, gadget reviews, gameplay, tutorials
+    // 2. If direct search returned very few results, fallback to music query
+    if (!results?.videos || results.videos.length < 3) {
+      results = await ytSearch(`${query} song`);
+    }
+
+    // Non-music filter keywords to reject unboxings, reviews, gameplay
     const nonMusicKeywords = [
-    "unboxing",
-    "review",
-    "hands on",
-    "unlock without data loss",
-    "gameplay",
-    "walkthrough",
-    "tutorial",
-    "specifications",
-    "camera test",
-    "battery drain",
-    "price in",
-    "speed test",
-    "pubg",
-    "free fire",
-    "gta"];
+      "unboxing",
+      "hands on review",
+      "camera test",
+      "battery drain",
+      "price in india",
+      "speed test comparison",
+      "pubg mobile gameplay",
+      "free fire live stream",
+      "gta 5 roleplay",
+    ];
 
-
-    // Filter to real songs
-    const validVideos = results.videos.filter((v) => {
+    const validVideos = (results?.videos || []).filter((v) => {
       const lowerTitle = v.title.toLowerCase();
-      const isTooLong = v.seconds > 600; // over 10 minutes
+      const isTooLong = v.seconds > 720; // over 12 minutes
       const isCompilation =
-      lowerTitle.includes("compilation") ||
-      lowerTitle.includes("full album") ||
-      lowerTitle.includes("playlist") ||
-      lowerTitle.includes("1 hour") ||
-      lowerTitle.includes("10 hours");
+        lowerTitle.includes("compilation") ||
+        lowerTitle.includes("full album jukebox") ||
+        lowerTitle.includes("10 hours") ||
+        lowerTitle.includes("non stop dj mix");
 
       const isNonMusic = nonMusicKeywords.some((k) => lowerTitle.includes(k));
 
@@ -55,26 +48,31 @@ export async function GET(request) {
     });
 
     const targetList =
-    validVideos.length > 0 ? validVideos.slice(0, 15) : results.videos.slice(0, 15);
+      validVideos.length > 0 ? validVideos.slice(0, 20) : (results?.videos || []).slice(0, 20);
 
     const songs = targetList.map((v) => {
-      // Clean up common video title artifacts for music UI
-      let cleanTitle = v.title.
-      replace(/\s*\(Official (Music )?Video\)/gi, "").
-      replace(/\s*\[Official (Music )?Video\]/gi, "").
-      replace(/\s*\(Official Audio\)/gi, "").
-      replace(/\s*\[Official Audio\]/gi, "").
-      replace(/\s*\(Lyric Video\)/gi, "").
-      replace(/\s*\[Lyric Video\]/gi, "").
-      replace(/\s*\(Audio\)/gi, "").
-      replace(/\s*\[Audio\]/gi, "").
-      replace(/\s*\|.*$/g, "").
-      trim();
+      let cleanTitle = v.title
+        .replace(/\s*\(Official (Music )?Video\)/gi, "")
+        .replace(/\s*\[Official (Music )?Video\]/gi, "")
+        .replace(/\s*\(Official Audio\)/gi, "")
+        .replace(/\s*\[Official Audio\]/gi, "")
+        .replace(/\s*\(Lyric Video\)/gi, "")
+        .replace(/\s*\[Lyric Video\]/gi, "")
+        .replace(/\s*\(Audio\)/gi, "")
+        .replace(/\s*\[Audio\]/gi, "")
+        .replace(/\s*\(Full Video\)/gi, "")
+        .trim();
 
       let artistName = v.author?.name || "Campus Artist";
 
-      // If title is "Artist - Song Name", parse them cleanly
-      if (cleanTitle.includes(" - ")) {
+      // If title contains pipe like "Song | Movie | Artist", parse title cleanly
+      if (cleanTitle.includes("|")) {
+        const pipeParts = cleanTitle.split("|").map((p) => p.trim());
+        cleanTitle = pipeParts[0];
+        if (pipeParts.length > 1 && pipeParts[1]) {
+          artistName = pipeParts.slice(1).join(" • ");
+        }
+      } else if (cleanTitle.includes(" - ")) {
         const parts = cleanTitle.split(" - ");
         if (parts.length === 2) {
           artistName = parts[0].trim();
@@ -82,27 +80,26 @@ export async function GET(request) {
         }
       }
 
-      // Remove " - Topic" or "VEVO" from channel name if present
-      artistName = artistName.
-      replace(/\s*-\s*Topic$/i, "").
-      replace(/VEVO$/i, "").
-      trim();
+      artistName = artistName
+        .replace(/\s*-\s*Topic$/i, "")
+        .replace(/VEVO$/i, "")
+        .trim();
 
       const coverUrl =
-      v.thumbnail ||
-      `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
+        v.thumbnail ||
+        `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
 
       return {
         id: `yt_${v.videoId}`,
         youtubeId: v.videoId,
-        title: cleanTitle,
-        artist: artistName,
+        title: cleanTitle || v.title,
+        artist: artistName || "Music Artist",
         album: "Campus Stream",
-        duration: v.seconds,
+        duration: v.seconds || 180,
         coverUrl,
         audioUrl: "",
         source: "youtube",
-        plays: v.views ? `${(v.views / 1000000).toFixed(1)}M` : "1.2M"
+        plays: v.views ? `${(v.views / 1000000).toFixed(1)}M` : "1.2M",
       };
     });
 
