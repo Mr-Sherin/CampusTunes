@@ -68,7 +68,11 @@ export function BottomPlayer() {
   const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState(null);
 
-  const isYouTube = Boolean(currentSong?.source === "youtube" || currentSong?.youtubeId);
+  const directAudioUrl = currentSong?.audioUrl || currentSong?.audio_url;
+  const isYouTube = Boolean(
+    (!directAudioUrl && currentSong?.youtubeId) ||
+    (currentSong?.source === "youtube" && !directAudioUrl)
+  );
 
   const handleLikeClick = async () => {
     const { data } = await supabase.auth.getUser();
@@ -125,12 +129,17 @@ export function BottomPlayer() {
   // Synchronize HTML5 Audio
   useEffect(() => {
     if (!audioRef.current || isYouTube) return;
-    if (isPlaying) {
-      audioRef.current.play().catch(() => setIsPlaying(false));
-    } else {
-      audioRef.current.pause();
+    if (directAudioUrl) {
+      if (isPlaying) {
+        const p = audioRef.current.play();
+        if (p !== undefined) {
+          p.catch((err) => console.warn("Audio autoplay blocked:", err));
+        }
+      } else {
+        audioRef.current.pause();
+      }
     }
-  }, [isPlaying, currentSong, isYouTube, setIsPlaying]);
+  }, [isPlaying, currentSong?.id, directAudioUrl, isYouTube]);
 
   useEffect(() => {
     if (!audioRef.current || isYouTube) return;
@@ -530,6 +539,46 @@ export function BottomPlayer() {
         isOpen={showPlaylistModal}
         onClose={() => setShowPlaylistModal(false)}
       />
+
+      {/* Hidden HTML5 Audio Engine for Campus Tracks & Direct Streams */}
+      <audio
+        ref={audioRef}
+        src={!isYouTube && directAudioUrl ? directAudioUrl : undefined}
+        onTimeUpdate={handleAudioTimeUpdate}
+        onEnded={playNext}
+        onLoadedMetadata={(e) => {
+          if (e.currentTarget.duration) {
+            setPlaybackTime(e.currentTarget.currentTime || 0, e.currentTarget.duration);
+          }
+        }}
+        preload="auto"
+      />
+
+      {/* Hidden YouTube Engine for YouTube Tracks */}
+      <div
+        className="fixed -top-96 -left-96 w-1 h-1 pointer-events-none opacity-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        {isYouTube && currentSong?.youtubeId && (
+          <YouTube
+            videoId={currentSong.youtubeId}
+            opts={{
+              height: "10",
+              width: "10",
+              playerVars: {
+                autoplay: isPlaying ? 1 : 0,
+                controls: 0,
+                disablekb: 1,
+                fs: 0,
+                playsinline: 1,
+                origin: typeof window !== "undefined" ? window.location.origin : undefined,
+              },
+            }}
+            onReady={onYtReady}
+            onStateChange={onYtStateChange}
+          />
+        )}
+      </div>
     </>
   );
 }

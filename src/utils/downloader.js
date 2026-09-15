@@ -2,14 +2,14 @@
 
 /**
  * Downloads the music track file directly and instantly to the user's computer.
- * @param {Object} song - The song object containing title, artist, audioUrl, youtubeId
+ * @param {Object} song - The song object containing title, artist, audioUrl, audio_url, youtubeId
  * @param {Function} onProgress - Optional callback for download progress/status
  */
 export async function downloadTrack(song, onProgress = () => {}) {
   if (!song) return;
 
   const cleanTitle = (song.title || "Track").trim();
-  const cleanArtist = (song.artist || "CampusTunes").trim();
+  const cleanArtist = (song.artist || song.artist_name || "CampusTunes").trim();
   const filename = `${cleanArtist} - ${cleanTitle}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
 
   const ytId =
@@ -24,24 +24,51 @@ export async function downloadTrack(song, onProgress = () => {}) {
       message: `Preparing download for "${cleanTitle}"...`,
     });
 
-    const params = new URLSearchParams({
-      title: cleanTitle,
-      artist: cleanArtist,
-      action: "url",
-      ...(song.audioUrl ? { audioUrl: song.audioUrl } : {}),
-      ...(ytId ? { youtubeId: ytId } : {}),
-    });
+    let targetUrl = song.audioUrl || song.audio_url;
 
-    const response = await fetch(`/api/download?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error(`Download server returned ${response.status}`);
+    // If it's a YouTube track without direct audioUrl, fetch from download API
+    if (!targetUrl && ytId) {
+      const params = new URLSearchParams({
+        title: cleanTitle,
+        artist: cleanArtist,
+        action: "url",
+        youtubeId: ytId,
+      });
+      const response = await fetch(`/api/download?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        targetUrl = data.url;
+      }
     }
 
-    const data = await response.json();
-    if (data.url) {
-      // Trigger native instant browser download
+    if (targetUrl) {
+      // 1. Try Blob fetch for instant download with custom filename
+      try {
+        const res = await fetch(targetUrl, { mode: "cors" });
+        if (res.ok) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+          onProgress({
+            status: "success",
+            message: `"${cleanTitle}" downloaded successfully!`,
+          });
+          return;
+        }
+      } catch (fetchErr) {
+        console.warn("Direct blob download failed, falling back to direct anchor:", fetchErr);
+      }
+
+      // 2. Direct Anchor fallback
       const link = document.createElement("a");
-      link.href = data.url;
+      link.href = targetUrl;
       link.download = filename;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
@@ -54,7 +81,7 @@ export async function downloadTrack(song, onProgress = () => {}) {
         message: `Download started for "${cleanTitle}"!`,
       });
     } else {
-      throw new Error("No download stream URL received");
+      throw new Error("No audio stream URL available");
     }
   } catch (error) {
     console.error("Music download error:", error);
@@ -64,3 +91,4 @@ export async function downloadTrack(song, onProgress = () => {}) {
     });
   }
 }
+
