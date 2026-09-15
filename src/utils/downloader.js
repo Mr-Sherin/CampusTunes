@@ -26,18 +26,35 @@ export async function downloadTrack(song, onProgress = () => {}) {
 
     let targetUrl = song.audioUrl || song.audio_url;
 
-    // If it's a YouTube track without direct audioUrl, fetch from download API
+    // If it's a YouTube track without direct audioUrl, attempt server stream extraction
     if (!targetUrl && ytId) {
-      const params = new URLSearchParams({
-        title: cleanTitle,
-        artist: cleanArtist,
-        action: "url",
-        youtubeId: ytId,
-      });
-      const response = await fetch(`/api/download?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        targetUrl = data.url;
+      try {
+        const params = new URLSearchParams({
+          title: cleanTitle,
+          artist: cleanArtist,
+          action: "url",
+          youtubeId: ytId,
+        });
+        const response = await fetch(`/api/download?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.url) {
+            targetUrl = data.url;
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Server stream extraction warning:", apiErr);
+      }
+
+      // High-speed converter portal fallback if serverless environment cannot extract directly
+      if (!targetUrl) {
+        const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${ytId}&f=mp3`;
+        window.open(converterUrl, "_blank", "noopener,noreferrer");
+        onProgress({
+          status: "success",
+          message: `Download portal opened for "${cleanTitle}"!`,
+        });
+        return;
       }
     }
 
@@ -81,7 +98,7 @@ export async function downloadTrack(song, onProgress = () => {}) {
         message: `Download started for "${cleanTitle}"!`,
       });
     } else {
-      throw new Error("No audio stream URL available");
+      throw new Error("No audio stream available");
     }
   } catch (error) {
     console.error("Music download error:", error);
