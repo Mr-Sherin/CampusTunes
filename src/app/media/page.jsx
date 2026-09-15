@@ -54,25 +54,38 @@ function MediaStreamPlayer() {
 
   const cleanFilename = `${artist} - ${title}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
 
-  const handleDirectDownload = () => {
-    const params = new URLSearchParams({
-      title,
-      artist,
-      mode: "attachment",
-    });
-    if (audioUrlParam) params.set("audioUrl", audioUrlParam);
-    if (youtubeId) params.set("youtubeId", youtubeId);
+  const streamEndpoint = `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=inline${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`;
+
+  const handleDirectDownload = async () => {
+    const downloadUrl = `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=attachment${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`;
+
+    try {
+      const res = await fetch(downloadUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = cleanFilename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        return;
+      }
+    } catch (e) {
+      console.warn("Blob fetch fallback:", e);
+    }
 
     const a = document.createElement("a");
-    a.href = `/api/download?${params.toString()}`;
+    a.href = downloadUrl;
     a.download = cleanFilename;
     a.style.display = "none";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
   };
-
-  const streamEndpoint = streamSrc || `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=inline${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`;
 
   return (
     <div className="min-h-screen bg-[#07060e] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
