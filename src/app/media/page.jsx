@@ -52,6 +52,28 @@ function MediaStreamPlayer() {
     }
   }, [audioUrlParam, youtubeId, title, artist]);
 
+  const cleanFilename = `${artist} - ${title}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
+
+  const handleDirectDownload = () => {
+    const params = new URLSearchParams({
+      title,
+      artist,
+      mode: "attachment",
+    });
+    if (audioUrlParam) params.set("audioUrl", audioUrlParam);
+    if (youtubeId) params.set("youtubeId", youtubeId);
+
+    const a = document.createElement("a");
+    a.href = `/api/download?${params.toString()}`;
+    a.download = cleanFilename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const streamEndpoint = streamSrc || `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=inline${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`;
+
   return (
     <div className="min-h-screen bg-[#07060e] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden select-none">
       {/* Ambient background glows */}
@@ -100,29 +122,38 @@ function MediaStreamPlayer() {
         <p className="text-sm text-zinc-400 font-medium mb-6">{artist}</p>
 
         {/* Instructions banner for 3-dots download */}
-        <div className="w-full bg-violet-600/10 border border-violet-500/20 rounded-xl p-3 mb-6 flex items-center gap-3 text-left">
+        <div className="w-full bg-violet-600/10 border border-violet-500/20 rounded-xl p-3 mb-5 flex items-center gap-3 text-left">
           <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0 text-violet-400">
             <Download size={16} />
           </div>
           <div className="text-xs text-zinc-300">
-            <p className="font-semibold text-white">Download via Player Controls:</p>
+            <p className="font-semibold text-white">Save to Downloads Folder:</p>
             <p className="text-[11px] text-zinc-400 mt-0.5">
-              Click the <strong className="text-violet-300">three dots (⋮)</strong> on the audio player below and choose <strong className="text-white">Download</strong>.
+              Click the <strong className="text-violet-300">three dots (⋮)</strong> on the audio player or use the button below to download <strong className="text-white">{cleanFilename}</strong>.
             </p>
           </div>
         </div>
 
         {/* Native Browser HTML5 Audio Player with 3-dots */}
-        <div className="w-full mt-2 flex flex-col items-center gap-3">
+        <div className="w-full flex flex-col items-center gap-3">
           <audio
             ref={audioRef}
             controls
             autoPlay
-            src={streamSrc || `/api/download?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}${youtubeId ? `&youtubeId=${encodeURIComponent(youtubeId)}` : ""}${audioUrlParam ? `&audioUrl=${encodeURIComponent(audioUrlParam)}` : ""}`}
+            src={streamEndpoint}
             className="w-full h-12 rounded-xl bg-zinc-800 outline-none accent-violet-500 shadow-lg"
           >
             Your browser does not support the audio element.
           </audio>
+
+          {/* Quick Direct Download Button */}
+          <button
+            onClick={handleDirectDownload}
+            className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 active:scale-[0.98] text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
+          >
+            <Download size={16} />
+            <span>Download {cleanFilename}</span>
+          </button>
         </div>
 
         {/* Fallback helper only if stream portal needed */}
@@ -143,7 +174,7 @@ function MediaStreamPlayer() {
         {/* Verified Badge */}
         <div className="mt-6 pt-4 border-t border-white/5 w-full flex items-center justify-center gap-2 text-[11px] text-zinc-500">
           <ShieldCheck size={14} className="text-emerald-400" />
-          <span>CampusTunes Native HTML5 Audio Delivery</span>
+          <span>CampusTunes Native Audio Delivery • Saved to Downloads</span>
         </div>
       </main>
     </div>

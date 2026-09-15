@@ -23,6 +23,9 @@ export async function GET(request) {
   const safeTitle = title.replace(/[/\\?%*:|"<>]/g, "").trim() || "Track";
   const cleanFilename = `${safeArtist} - ${safeTitle}.mp3`;
 
+  const mode = searchParams.get("mode") || "inline"; // "inline" for player with 3-dot download, "attachment" for instant download
+  const dispositionType = mode === "attachment" ? "attachment" : "inline";
+
   // 1. Direct Audio URL (e.g. Supabase Storage / MP3 link)
   if (audioUrl && audioUrl.startsWith("http")) {
     if (action === "url") {
@@ -35,8 +38,9 @@ export async function GET(request) {
         return new Response(audioRes.body, {
           headers: {
             "Content-Type": "audio/mpeg",
-            "Content-Disposition": `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+            "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
             "Cache-Control": "public, max-age=86400",
+            "Accept-Ranges": "bytes",
           },
         });
       }
@@ -62,7 +66,8 @@ export async function GET(request) {
           return new Response(audioRes.body, {
             headers: {
               "Content-Type": "audio/mpeg",
-              "Content-Disposition": `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+              "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+              "Accept-Ranges": "bytes",
             },
           });
         }
@@ -92,7 +97,8 @@ export async function GET(request) {
             return new Response(streamRes.body, {
               headers: {
                 "Content-Type": "audio/mpeg",
-                "Content-Disposition": `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+                "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+                "Accept-Ranges": "bytes",
               },
             });
           }
@@ -131,7 +137,8 @@ export async function GET(request) {
           return new Response(streamRes.body, {
             headers: {
               "Content-Type": "audio/mpeg",
-              "Content-Disposition": `attachment; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+              "Content-Disposition": `${dispositionType}; filename="${cleanFilename}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+              "Accept-Ranges": "bytes",
             },
           });
         }
