@@ -29,10 +29,10 @@ export function DownloadModal({ isOpen, onClose, song }) {
   const cleanArtist = (song.artist || song.artist_name || "Campus Musician").trim();
   const filename = `${cleanArtist} - ${cleanTitle}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
 
-  const handleStartDownload = async () => {
+  const handleStartDownload = () => {
     setIsDownloading(true);
     setDownloadSuccess(false);
-    setProgressMsg("Connecting to studio audio stream...");
+    setProgressMsg("Opening separate media download tab...");
 
     try {
       const ytId =
@@ -42,85 +42,37 @@ export function DownloadModal({ isOpen, onClose, song }) {
           : null);
 
       const targetAudioUrl = song.audioUrl || song.audio_url || null;
+      const coverUrl =
+        song.coverUrl ||
+        song.cover_url ||
+        "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80";
 
-      // 1. Direct audio track (e.g. Supabase Campus upload)
+      // Build media tab URL
+      const params = new URLSearchParams({
+        title: cleanTitle,
+        artist: cleanArtist,
+        cover: coverUrl,
+      });
+
       if (targetAudioUrl) {
-        const params = new URLSearchParams({
-          title: cleanTitle,
-          artist: cleanArtist,
-          audioUrl: targetAudioUrl,
-        });
-
-        const downloadEndpoint = `/api/download?${params.toString()}`;
-        const a = document.createElement("a");
-        a.href = downloadEndpoint;
-        a.download = filename;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setIsDownloading(false);
-        setDownloadSuccess(true);
-        setProgressMsg("Downloaded to your device!");
-        return;
+        params.set("audioUrl", targetAudioUrl);
       }
-
-      // 2. YouTube audio track
       if (ytId) {
-        setProgressMsg("Extracting studio audio bitstream...");
-        let streamUrl = null;
-
-        try {
-          const checkRes = await fetch(
-            `/api/download?title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&action=url&youtubeId=${encodeURIComponent(ytId)}`
-          );
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData?.url) {
-              streamUrl = checkData.url;
-            }
-          }
-        } catch (checkErr) {
-          console.warn("Direct stream extraction check:", checkErr);
-        }
-
-        if (streamUrl) {
-          // Native Save As via stream proxy
-          const params = new URLSearchParams({
-            title: cleanTitle,
-            artist: cleanArtist,
-            audioUrl: streamUrl,
-          });
-          const downloadEndpoint = `/api/download?${params.toString()}`;
-          const a = document.createElement("a");
-          a.href = downloadEndpoint;
-          a.download = filename;
-          a.style.display = "none";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          setIsDownloading(false);
-          setDownloadSuccess(true);
-          setProgressMsg("Downloaded to your device!");
-        } else {
-          // Reliable converter portal fallback to avoid 404 "File wasn't available on site"
-          const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${ytId}&f=mp3`;
-          window.open(converterUrl, "_blank", "noopener,noreferrer");
-
-          setIsDownloading(false);
-          setDownloadSuccess(true);
-          setProgressMsg("Download stream opened!");
-        }
-        return;
+        params.set("youtubeId", ytId);
       }
 
-      throw new Error("No audio source available");
+      const mediaTabUrl = `/media?${params.toString()}`;
+
+      // Open separate tab with HTML5 player, 3 dots, and download option
+      window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
+
+      setIsDownloading(false);
+      setDownloadSuccess(true);
+      setProgressMsg("Media player tab opened!");
     } catch (err) {
       console.error("Modal download error:", err);
       setIsDownloading(false);
-      setProgressMsg("Download failed. Please try again.");
+      setProgressMsg("Failed to open media player.");
     }
   };
 

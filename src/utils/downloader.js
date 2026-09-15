@@ -11,7 +11,10 @@ export async function downloadTrack(song, onProgress = () => {}) {
 
   const cleanTitle = (song.title || "Track").trim();
   const cleanArtist = (song.artist || song.artist_name || "Campus Musician").trim();
-  const safeFilename = `${cleanArtist} - ${cleanTitle}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
+  const coverUrl =
+    song.coverUrl ||
+    song.cover_url ||
+    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80";
 
   const ytId =
     song.youtubeId ||
@@ -24,86 +27,34 @@ export async function downloadTrack(song, onProgress = () => {}) {
   try {
     onProgress({
       status: "downloading",
-      message: `Preparing download for "${cleanTitle}"...`,
+      message: `Opening media stream for "${cleanTitle}"...`,
     });
 
-    // 1. Direct audio track (e.g. Supabase Campus upload)
+    const params = new URLSearchParams({
+      title: cleanTitle,
+      artist: cleanArtist,
+      cover: coverUrl,
+    });
+
     if (targetAudioUrl) {
-      const params = new URLSearchParams({
-        title: cleanTitle,
-        artist: cleanArtist,
-        audioUrl: targetAudioUrl,
-      });
-
-      const downloadEndpoint = `/api/download?${params.toString()}`;
-      const link = document.createElement("a");
-      link.href = downloadEndpoint;
-      link.download = safeFilename;
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      onProgress({
-        status: "success",
-        message: `Downloaded to your device!`,
-      });
-      return;
+      params.set("audioUrl", targetAudioUrl);
     }
-
-    // 2. YouTube audio track
     if (ytId) {
-      let streamUrl = null;
-      try {
-        const checkRes = await fetch(
-          `/api/download?title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&action=url&youtubeId=${encodeURIComponent(ytId)}`
-        );
-        if (checkRes.ok) {
-          const checkData = await checkRes.json();
-          if (checkData?.url) {
-            streamUrl = checkData.url;
-          }
-        }
-      } catch (checkErr) {
-        console.warn("Direct stream extraction check:", checkErr);
-      }
-
-      if (streamUrl) {
-        const params = new URLSearchParams({
-          title: cleanTitle,
-          artist: cleanArtist,
-          audioUrl: streamUrl,
-        });
-        const downloadEndpoint = `/api/download?${params.toString()}`;
-        const link = document.createElement("a");
-        link.href = downloadEndpoint;
-        link.download = safeFilename;
-        link.style.display = "none";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        onProgress({
-          status: "success",
-          message: `Downloaded to your device!`,
-        });
-      } else {
-        const converterUrl = `https://loader.to/api/button/?url=https://www.youtube.com/watch?v=${ytId}&f=mp3`;
-        window.open(converterUrl, "_blank", "noopener,noreferrer");
-        onProgress({
-          status: "success",
-          message: `Download stream opened!`,
-        });
-      }
-      return;
+      params.set("youtubeId", ytId);
     }
 
-    throw new Error("No audio source found");
+    const mediaTabUrl = `/media?${params.toString()}`;
+    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
+
+    onProgress({
+      status: "success",
+      message: `Media player tab opened for "${cleanTitle}"!`,
+    });
   } catch (error) {
     console.error("Music download error:", error);
     onProgress({
       status: "error",
-      message: `Failed to download "${cleanTitle}". Please try again.`,
+      message: `Failed to open media player for "${cleanTitle}".`,
     });
   }
 }
