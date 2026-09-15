@@ -28,6 +28,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
 const CAMPUS_GENRES = [
   "Malayalam Indie",
@@ -86,8 +87,7 @@ export default function DashboardPage() {
   const [uploadStep, setUploadStep] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [user, setUser] = useState(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const { user, profile, isAdmin, isAuthLoading } = useAuth();
   const [uploadedTracks, setUploadedTracks] = useState([]);
 
   const audioInputRef = useRef(null);
@@ -98,29 +98,13 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsMounted(true);
 
-    async function checkAuth() {
-      const { data } = await supabase.auth.getUser();
-      setUser(data?.user || null);
-      setIsAuthLoading(false);
-    }
-    checkAuth();
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user || null);
-      setIsAuthLoading(false);
-    });
-
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("upload") === "true") {
         setShowUploadModal(true);
       }
     }
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [supabase]);
+  }, []);
 
   // Handle Audio File Selection & Local Preview
   const handleAudioSelect = (file) => {
@@ -255,7 +239,7 @@ export default function DashboardPage() {
           cover_url: coverUrl,
           duration: 180,
           download_enabled: downloadEnabled,
-          status: "published",
+          status: isAdmin ? "published" : "pending",
         })
         .select()
         .single();
