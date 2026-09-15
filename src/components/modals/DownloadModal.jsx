@@ -29,51 +29,54 @@ export function DownloadModal({ isOpen, onClose, song }) {
   const cleanArtist = (song.artist || song.artist_name || "Campus Musician").trim();
   const filename = `${cleanArtist} - ${cleanTitle}.mp3`.replace(/[/\\?%*:|"<>]/g, "");
 
+  const ytId =
+    song.youtubeId ||
+    (typeof song.id === "string" && song.id.startsWith("yt_")
+      ? song.id.replace("yt_", "")
+      : null);
+
+  const targetAudioUrl = song.audioUrl || song.audio_url || null;
+  const coverUrl =
+    song.coverUrl ||
+    song.cover_url ||
+    "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80";
+
+  // Build direct media tab URL
+  const mediaTabParams = new URLSearchParams({
+    title: cleanTitle,
+    artist: cleanArtist,
+    cover: coverUrl,
+  });
+  if (targetAudioUrl) mediaTabParams.set("audioUrl", targetAudioUrl);
+  if (ytId) mediaTabParams.set("youtubeId", ytId);
+  const mediaTabUrl = `/media?${mediaTabParams.toString()}`;
+
+  const handleOpenMediaTab = () => {
+    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handleStartDownload = () => {
-    setIsDownloading(true);
-    setDownloadSuccess(false);
-    setProgressMsg("Opening separate media download tab...");
-
-    try {
-      const ytId =
-        song.youtubeId ||
-        (typeof song.id === "string" && song.id.startsWith("yt_")
-          ? song.id.replace("yt_", "")
-          : null);
-
-      const targetAudioUrl = song.audioUrl || song.audio_url || null;
-      const coverUrl =
-        song.coverUrl ||
-        song.cover_url ||
-        "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80";
-
-      // Build media tab URL
+    if (targetAudioUrl) {
       const params = new URLSearchParams({
         title: cleanTitle,
         artist: cleanArtist,
-        cover: coverUrl,
+        audioUrl: targetAudioUrl,
       });
-
-      if (targetAudioUrl) {
-        params.set("audioUrl", targetAudioUrl);
-      }
-      if (ytId) {
-        params.set("youtubeId", ytId);
-      }
-
-      const mediaTabUrl = `/media?${params.toString()}`;
-
-      // Open separate tab with HTML5 player, 3 dots, and download option
-      window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
-
-      setIsDownloading(false);
+      const downloadEndpoint = `/api/download?${params.toString()}`;
+      const a = document.createElement("a");
+      a.href = downloadEndpoint;
+      a.download = filename;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setDownloadSuccess(true);
-      setProgressMsg("Media player tab opened!");
-    } catch (err) {
-      console.error("Modal download error:", err);
-      setIsDownloading(false);
-      setProgressMsg("Failed to open media player.");
+      return;
     }
+
+    // Otherwise open the media stream tab with the 3 dots
+    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
+    setDownloadSuccess(true);
   };
 
   const handleCopyTrackLink = () => {
@@ -103,7 +106,7 @@ export function DownloadModal({ isOpen, onClose, song }) {
             </div>
             <div>
               <h3 className="font-display font-bold text-sm text-white">Download Studio Track</h3>
-              <p className="text-[11px] text-zinc-400">Save for offline campus listening</p>
+              <p className="text-[11px] text-zinc-400">Audio playback & three-dot download</p>
             </div>
           </div>
 
@@ -119,11 +122,7 @@ export function DownloadModal({ isOpen, onClose, song }) {
         <div className="mt-5 p-3.5 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-4">
           <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-zinc-800 shadow-md">
             <Image
-              src={
-                song.coverUrl ||
-                song.cover_url ||
-                "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80"
-              }
+              src={coverUrl}
               alt={cleanTitle}
               fill
               className="object-cover"
@@ -140,78 +139,31 @@ export function DownloadModal({ isOpen, onClose, song }) {
           </div>
         </div>
 
-        {/* Quality Selector */}
-        <div className="mt-5 space-y-2">
-          <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Audio Quality
-          </label>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              onClick={() => setQuality("320")}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                quality === "320"
-                  ? "bg-violet-600/20 border-violet-500/80 text-white shadow-sm shadow-violet-500/10"
-                  : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
-              }`}
+        {/* Standard Browser Audio Player with 3-Dots */}
+        {targetAudioUrl && (
+          <div className="mt-4 p-3 bg-zinc-900/90 border border-white/10 rounded-2xl flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400 px-1">
+              <span>Standard Media Player:</span>
+              <span className="text-violet-400 text-[10px] font-medium">Click 3 dots (⋮) to Download</span>
+            </div>
+            <audio
+              controls
+              src={targetAudioUrl}
+              className="w-full h-10 rounded-lg outline-none"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs">Studio HD</span>
-                <span className="text-[10px] font-mono text-violet-300">320 kbps</span>
-              </div>
-              <p className="text-[10px] text-zinc-400 mt-0.5">Full dynamic fidelity</p>
-            </button>
-
-            <button
-              onClick={() => setQuality("192")}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                quality === "192"
-                  ? "bg-violet-600/20 border-violet-500/80 text-white shadow-sm shadow-violet-500/10"
-                  : "bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-xs">Standard</span>
-                <span className="text-[10px] font-mono text-zinc-400">192 kbps</span>
-              </div>
-              <p className="text-[10px] text-zinc-400 mt-0.5">Compact mobile size</p>
-            </button>
-          </div>
-        </div>
-
-        {/* Status Message */}
-        {progressMsg && (
-          <div className="mt-4 p-3 rounded-xl bg-white/5 border border-white/10 flex items-center gap-2.5 text-xs">
-            {isDownloading && <Loader2 size={15} className="animate-spin text-violet-400 shrink-0" />}
-            {downloadSuccess && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
-            <span className={downloadSuccess ? "text-emerald-300 font-medium" : "text-zinc-300"}>
-              {progressMsg}
-            </span>
+              Your browser does not support the audio element.
+            </audio>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="mt-6 flex flex-col gap-2.5">
+        <div className="mt-5 flex flex-col gap-2.5">
           <button
-            onClick={handleStartDownload}
-            disabled={isDownloading}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 transition-all cursor-pointer disabled:opacity-50"
+            onClick={handleOpenMediaTab}
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
           >
-            {isDownloading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                <span>Downloading Track...</span>
-              </>
-            ) : downloadSuccess ? (
-              <>
-                <CheckCircle2 size={16} className="text-emerald-300" />
-                <span>Download Again</span>
-              </>
-            ) : (
-              <>
-                <Download size={16} />
-                <span>Download MP3</span>
-              </>
-            )}
+            <Download size={16} />
+            <span>Open in Separate Tab (With 3-Dots)</span>
           </button>
 
           <button
@@ -235,7 +187,7 @@ export function DownloadModal({ isOpen, onClose, song }) {
         {/* Security Badge */}
         <div className="mt-4 flex items-center justify-center gap-1.5 text-[10px] text-zinc-500">
           <ShieldCheck size={12} className="text-emerald-400" />
-          <span>CampusTunes Verified Audio • DRM-Free for Student Use</span>
+          <span>CampusTunes Native HTML5 Audio Delivery</span>
         </div>
       </div>
     </div>
