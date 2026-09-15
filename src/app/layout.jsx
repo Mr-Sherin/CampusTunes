@@ -16,11 +16,13 @@ export const metadata = {
   description: "Stream high-definition tracks, discover student bands, and broadcast campus productions.",
 };
 
+import { AuthProvider } from "@/context/AuthContext";
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${inter.variable} ${jakarta.variable} dark`}>
       <body className="bg-[#07060e] text-white antialiased min-h-screen selection:bg-primary/30 selection:text-white">
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

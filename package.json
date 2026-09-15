@@ -4,22 +4,40 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "powershell -ExecutionPolicy Bypass -File ../start-all.ps1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
+    "chart.js": "^4.5.1",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^1.26.0",
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "19.2.4",
+    "react-youtube": "^10.1.0",
+    "wavesurfer.js": "^7.12.11",
+    "yt-search": "^2.13.1",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/plugin-syntax-jsx": "^8.0.1",
+    "@babel/preset-react": "^8.0.1",
+    "@babel/preset-typescript": "^8.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/yt-search": "^2.10.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
+    "sucrase": "^3.35.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
