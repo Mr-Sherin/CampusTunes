@@ -211,22 +211,55 @@ export function BottomPlayer() {
     setPlaybackTime(newTime);
   };
 
-  const onYtReady = (event) => {
-    ytPlayerRef.current = event.target;
-    setIsYtReady(true);
-    if (event.target) {
-      event.target.setVolume(Math.round(volume * 100));
-      if (isPlaying) {
-        event.target.playVideo();
+  const handleTogglePlay = () => {
+    const nextState = !isPlaying;
+    setIsPlaying(nextState);
+
+    if (!nextState) {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch (e) {}
+      }
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch (e) {}
+      }
+    } else {
+      if (isYouTube && ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
+        try {
+          ytPlayerRef.current.playVideo();
+        } catch (e) {}
+      } else if (audioRef.current && currentSong?.audioUrl) {
+        const p = audioRef.current.play();
+        if (p !== undefined) p.catch(() => {});
       }
     }
   };
 
+  const onYtReady = (event) => {
+    ytPlayerRef.current = event.target;
+    setIsYtReady(true);
+    if (event.target) {
+      try {
+        event.target.setVolume(Math.round((isMuted ? 0 : volume) * 100));
+        if (isPlaying) {
+          event.target.playVideo();
+        } else {
+          event.target.pauseVideo();
+        }
+      } catch (e) {}
+    }
+  };
+
   const onYtStateChange = (event) => {
-    if (event.data === 0) {
+    if (event.data === 1 && !isPlaying) {
+      try {
+        event.target.pauseVideo();
+      } catch (e) {}
+    } else if (event.data === 0) {
       playNext();
-    } else if (event.data === 5 && isPlaying) {
-      event.target.playVideo();
     }
   };
 
@@ -256,18 +289,20 @@ export function BottomPlayer() {
 
       {/* Headless YouTube IFrame Engine for YouTube Tracks */}
       {isYouTube && currentSong.youtubeId && (
-        <div className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none overflow-hidden z-[-1]">
+        <div className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none overflow-hidden z-[-1]" aria-hidden="true">
           <YouTube
+            key={currentSong.youtubeId}
             videoId={currentSong.youtubeId}
             opts={{
               height: "10",
               width: "10",
               playerVars: {
-                autoplay: 1,
+                autoplay: isPlaying ? 1 : 0,
                 controls: 0,
                 playsinline: 1,
                 rel: 0,
                 enablejsapi: 1,
+                origin: typeof window !== "undefined" ? window.location.origin : undefined,
               },
             }}
             onReady={onYtReady}
@@ -366,7 +401,7 @@ export function BottomPlayer() {
             </button>
 
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={handleTogglePlay}
               className="w-9 h-9 rounded-full bg-violet-600 hover:bg-violet-500 hover:scale-105 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-[0_2px_14px_rgba(124,58,237,0.4)]"
               title={isPlaying ? "Pause" : "Play"}
             >
