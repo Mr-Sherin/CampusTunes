@@ -123,9 +123,44 @@ export function Navbar() {
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
+        let campusMatches = [];
+        try {
+          const { data: dbSongs } = await supabase
+            .from("songs")
+            .select("*")
+            .eq("status", "published")
+            .or(`title.ilike.%${query}%,artist_name.ilike.%${query}%,genre.ilike.%${query}%`)
+            .limit(5);
+
+          if (dbSongs && dbSongs.length > 0) {
+            campusMatches = dbSongs.map((s) => ({
+              id: s.id,
+              title: s.title,
+              artist: s.artist_name,
+              coverUrl: s.cover_url,
+              audioUrl: s.audio_url,
+              genre: s.genre,
+              duration: s.duration || 180,
+              source: "campus",
+              download_enabled: s.download_enabled,
+            }));
+          }
+        } catch {}
+
         const res = await fetch(`/api/yt/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setSearchResults(data.songs || []);
+        const ytSongs = data.songs || [];
+
+        const combined = [...campusMatches, ...ytSongs];
+        const seen = new Set();
+        const unique = combined.filter((s) => {
+          const key = (s.title + s.artist).toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setSearchResults(unique);
       } catch (err) {
         console.error("Search fetch error:", err);
       } finally {
@@ -134,7 +169,7 @@ export function Navbar() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

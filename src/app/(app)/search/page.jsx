@@ -46,17 +46,56 @@ export default function SearchPage() {
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const localMatches = MOCK_SONGS.filter(
-          (s) =>
-          s.title.toLowerCase().includes(activeQuery.toLowerCase()) ||
-          s.artist.toLowerCase().includes(activeQuery.toLowerCase())
-        );
+        // 1. Query Supabase for Campus Originals & Student Tracks
+        let campusMatches = [];
+        try {
+          const { data: dbSongs } = await supabase
+            .from("songs")
+            .select("*")
+            .eq("status", "published")
+            .or(`title.ilike.%${activeQuery}%,artist_name.ilike.%${activeQuery}%,genre.ilike.%${activeQuery}%`)
+            .limit(10);
 
+          if (dbSongs && dbSongs.length > 0) {
+            campusMatches = dbSongs.map((s) => ({
+              id: s.id,
+              title: s.title,
+              artist: s.artist_name,
+              coverUrl: s.cover_url,
+              audioUrl: s.audio_url,
+              genre: s.genre,
+              duration: s.duration || 180,
+              source: "campus",
+              download_enabled: s.download_enabled,
+            }));
+          }
+        } catch (dbErr) {
+          console.warn("Campus search query warning:", dbErr);
+        }
+
+        // 2. Query Global YouTube Music / Spotify Catalog
         const res = await fetch(`/api/yt/search?q=${encodeURIComponent(activeQuery)}`);
         const data = await res.json();
         const ytSongs = data.songs || [];
 
-        setResults([...localMatches, ...ytSongs]);
+        // 3. Query Local Mock Hits
+        const localMatches = MOCK_SONGS.filter(
+          (s) =>
+            s.title.toLowerCase().includes(activeQuery.toLowerCase()) ||
+            s.artist.toLowerCase().includes(activeQuery.toLowerCase())
+        );
+
+        // Merge results, giving priority to Campus Originals, then Global Streams
+        const combined = [...campusMatches, ...ytSongs, ...localMatches];
+        const seen = new Set();
+        const unique = combined.filter((s) => {
+          const key = (s.title + s.artist).toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setResults(unique);
       } catch (err) {
         console.error("Search page error:", err);
       } finally {
@@ -65,7 +104,7 @@ export default function SearchPage() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, selectedCategory]);
+  }, [query, selectedCategory, supabase]);
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
