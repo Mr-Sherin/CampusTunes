@@ -216,21 +216,35 @@ export function BottomPlayer() {
     setIsPlaying(nextState);
 
     if (!nextState) {
+      // 1. Hardware-level pause on HTML5 Audio
       if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-        } catch (e) {}
+        try { audioRef.current.pause(); } catch (e) {}
       }
+      if (typeof document !== "undefined") {
+        document.querySelectorAll("audio").forEach((a) => {
+          try { a.pause(); } catch (e) {}
+        });
+      }
+
+      // 2. Hardware-level pause on YouTube Player API
       if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
-        try {
-          ytPlayerRef.current.pauseVideo();
-        } catch (e) {}
+        try { ytPlayerRef.current.pauseVideo(); } catch (e) {}
+      }
+
+      // 3. Direct PostMessage broadcast fallback
+      if (typeof document !== "undefined") {
+        document.querySelectorAll("iframe").forEach((ifr) => {
+          try {
+            ifr.contentWindow?.postMessage(
+              JSON.stringify({ event: "command", func: "pauseVideo", args: "" }),
+              "*"
+            );
+          } catch (e) {}
+        });
       }
     } else {
       if (isYouTube && ytPlayerRef.current && typeof ytPlayerRef.current.playVideo === "function") {
-        try {
-          ytPlayerRef.current.playVideo();
-        } catch (e) {}
+        try { ytPlayerRef.current.playVideo(); } catch (e) {}
       } else if (audioRef.current && currentSong?.audioUrl) {
         const p = audioRef.current.play();
         if (p !== undefined) p.catch(() => {});
@@ -289,7 +303,7 @@ export function BottomPlayer() {
 
       {/* Headless YouTube IFrame Engine for YouTube Tracks */}
       {isYouTube && currentSong.youtubeId && (
-        <div className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none overflow-hidden z-[-1]" aria-hidden="true">
+        <div className="fixed bottom-0 right-0 w-1 h-1 opacity-[0.01] pointer-events-none overflow-hidden z-[-1]" aria-hidden="true">
           <YouTube
             key={currentSong.youtubeId}
             videoId={currentSong.youtubeId}
