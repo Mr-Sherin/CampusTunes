@@ -6,9 +6,9 @@ import { Heart, X, Users, Sparkles, ListPlus, Download, Mic2, Loader2, CheckCirc
 import Image from "next/image";
 import { AddToPlaylistModal } from "@/components/modals/AddToPlaylistModal";
 import { LyricsModal } from "@/components/modals/LyricsModal";
+import { DownloadModal } from "@/components/modals/DownloadModal";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import { createClient } from "@/utils/supabase/client";
-import { downloadTrack } from "@/utils/downloader";
 
 export function RightPanel() {
   const supabase = createClient();
@@ -20,7 +20,7 @@ export function RightPanel() {
   const [coverImgSrc, setCoverImgSrc] = useState("");
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
-  const [downloadStatus, setDownloadStatus] = useState(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
 
   const handleLikeClick = async () => {
     const { data } = await supabase.auth.getUser();
@@ -40,14 +40,9 @@ export function RightPanel() {
     setShowPlaylistModal(true);
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!currentSong) return;
-    await downloadTrack(currentSong, (status) => {
-      setDownloadStatus(status);
-      if (status.status === "success" || status.status === "error") {
-        setTimeout(() => setDownloadStatus(null), 3000);
-      }
-    });
+    setShowDownloadModal(true);
   };
 
   useEffect(() => {
@@ -165,13 +160,7 @@ export function RightPanel() {
           onClick={handleDownload}
           className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/60 text-xs font-semibold text-zinc-200 hover:text-white transition-all cursor-pointer"
         >
-          {downloadStatus?.status === "downloading" ? (
-            <Loader2 size={14} className="animate-spin text-violet-400" />
-          ) : downloadStatus?.status === "success" ? (
-            <CheckCircle2 size={14} className="text-violet-400" />
-          ) : (
-            <Download size={14} />
-          )}
+          <Download size={14} />
           <span>Download</span>
         </button>
 
@@ -256,6 +245,13 @@ export function RightPanel() {
       <LyricsModal
         isOpen={showLyricsModal}
         onClose={() => setShowLyricsModal(false)}
+        song={currentSong}
+      />
+
+      {/* In-App Native Download Modal */}
+      <DownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
         song={currentSong}
       />
     </aside>

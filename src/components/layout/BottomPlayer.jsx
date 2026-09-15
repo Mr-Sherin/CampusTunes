@@ -25,9 +25,9 @@ import Image from "next/image";
 import { QueueDrawer } from "@/components/player/QueueDrawer";
 import { AddToPlaylistModal } from "@/components/modals/AddToPlaylistModal";
 import { LyricsModal } from "@/components/modals/LyricsModal";
+import { DownloadModal } from "@/components/modals/DownloadModal";
 import { useAuthModalStore } from "@/store/useAuthModalStore";
 import { createClient } from "@/utils/supabase/client";
-import { downloadTrack } from "@/utils/downloader";
 import YouTube from "react-youtube";
 
 export function BottomPlayer() {
@@ -66,6 +66,7 @@ export function BottomPlayer() {
   const supabase = createClient();
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
   const [showLyricsModal, setShowLyricsModal] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState(null);
 
   const directAudioUrl = currentSong?.audioUrl || currentSong?.audio_url;
@@ -94,19 +95,14 @@ export function BottomPlayer() {
     setShowPlaylistModal(true);
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!currentSong) return;
     if (currentSong.download_enabled === false) {
       setDownloadStatus({ status: "error", message: "Downloads are disabled for this track." });
       setTimeout(() => setDownloadStatus(null), 3000);
       return;
     }
-    await downloadTrack(currentSong, (status) => {
-      setDownloadStatus(status);
-      if (status.status === "success" || status.status === "error") {
-        setTimeout(() => setDownloadStatus(null), 3000);
-      }
-    });
+    setShowDownloadModal(true);
   };
 
   // Record real play event when listening threshold is reached (anti-spam)
@@ -555,6 +551,13 @@ export function BottomPlayer() {
         onClose={() => setShowPlaylistModal(false)}
       />
 
+      {/* In-App Native Download Modal */}
+      <DownloadModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        song={currentSong}
+      />
+
       {/* Hidden HTML5 Audio Engine for Campus Tracks & Direct Streams */}
       <audio
         ref={audioRef}
@@ -569,13 +572,14 @@ export function BottomPlayer() {
         preload="auto"
       />
 
-      {/* Hidden YouTube Engine for YouTube Tracks */}
+      {/* Headless YouTube Engine for YouTube Tracks */}
       <div
-        className="fixed -top-96 -left-96 w-1 h-1 pointer-events-none opacity-0 overflow-hidden"
+        className="fixed bottom-0 right-0 w-1 h-1 opacity-[0.01] pointer-events-none overflow-hidden z-[-1]"
         aria-hidden="true"
       >
         {isYouTube && currentSong?.youtubeId && (
           <YouTube
+            key={currentSong.youtubeId}
             videoId={currentSong.youtubeId}
             opts={{
               height: "10",
