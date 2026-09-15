@@ -25,11 +25,6 @@ export async function downloadTrack(song, onProgress = () => {}) {
   const targetAudioUrl = song.audioUrl || song.audio_url || null;
 
   try {
-    onProgress({
-      status: "downloading",
-      message: `Opening media stream for "${cleanTitle}"...`,
-    });
-
     const params = new URLSearchParams({
       title: cleanTitle,
       artist: cleanArtist,
@@ -44,18 +39,11 @@ export async function downloadTrack(song, onProgress = () => {}) {
     }
 
     const mediaTabUrl = `/media?${params.toString()}`;
-    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
-
-    onProgress({
-      status: "success",
-      message: `Media player tab opened for "${cleanTitle}"!`,
-    });
+    
+    // Direct redirect in the current window (no popups)
+    window.location.href = mediaTabUrl;
   } catch (error) {
-    console.error("Music download error:", error);
-    onProgress({
-      status: "error",
-      message: `Failed to open media player for "${cleanTitle}".`,
-    });
+    console.error("Music redirect error:", error);
   }
 }
 

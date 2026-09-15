@@ -52,31 +52,11 @@ export function DownloadModal({ isOpen, onClose, song }) {
   const mediaTabUrl = `/media?${mediaTabParams.toString()}`;
 
   const handleOpenMediaTab = () => {
-    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
+    window.location.href = mediaTabUrl;
   };
 
   const handleStartDownload = () => {
-    if (targetAudioUrl) {
-      const params = new URLSearchParams({
-        title: cleanTitle,
-        artist: cleanArtist,
-        audioUrl: targetAudioUrl,
-      });
-      const downloadEndpoint = `/api/download?${params.toString()}`;
-      const a = document.createElement("a");
-      a.href = downloadEndpoint;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setDownloadSuccess(true);
-      return;
-    }
-
-    // Otherwise open the media stream tab with the 3 dots
-    window.open(mediaTabUrl, "_blank", "noopener,noreferrer");
-    setDownloadSuccess(true);
+    window.location.href = mediaTabUrl;
   };
 
   const handleCopyTrackLink = () => {
